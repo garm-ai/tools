@@ -1,0 +1,24 @@
+# OS and editor noise. The only thing that reliably tries to get itself
+# committed to a repository of prose.
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# mise: the committed config is the shared toolchain; the local one is for a
+# contributor pinning something for themselves.
+mise.local.toml
+.mise.local.toml
+
+# Go build output. `go build ./cmd/<x>` drops a binary in the working
+# directory rather than bin/, which is how the monorepo accumulated 45 MB of
+# them before anyone noticed.
+bin/
+*.out
+*.test
+coverage.*
+
+# Catalogue artifacts are built, not committed.
+*.binpb
