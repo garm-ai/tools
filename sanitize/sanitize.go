@@ -94,6 +94,15 @@ func Clean(s string, maxRunes int) Cleaned {
 
 	s = strings.ToValidUTF8(s, string(utf8.RuneError))
 	s = norm.NFC.String(s)
+	// Line endings first, silently: CRLF and a lone CR are how half the
+	// web writes a newline, not a character an injection hides in, and a
+	// page must not carry the invisible-characters notice for them.
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	// Fullwidth brackets fold to ASCII before neutralisation: NFC keeps
+	// them, a model may read them as the marker, and folding here means
+	// neutralise sees one bracket alphabet.
+	s = fullwidthBrackets.Replace(s)
 
 	var b strings.Builder
 	b.Grow(len(s))
@@ -144,6 +153,9 @@ func Clean(s string, maxRunes int) Cleaned {
 // neutralise rewrites anything that could read as one of our markers or as
 // a chat-template token. Runs of three or more brackets collapse to two, so
 // BeginMarker and EndMarker cannot be reconstituted from cleaned text.
+// fullwidthBrackets maps U+FF1C / U+FF1E to their ASCII forms.
+var fullwidthBrackets = strings.NewReplacer(string(rune(0xff1c)), "<", string(rune(0xff1e)), ">")
+
 func neutralise(s string) string {
 	s = openRun.ReplaceAllString(s, "<<")
 	s = closeRun.ReplaceAllString(s, ">>")
@@ -171,7 +183,7 @@ func classify(r rune) class {
 	case '\t', ' ':
 		return space
 	case '\r':
-		return drop
+		return newline // unreachable after Clean folds CR; kept for callers of classify
 	case 0x2028, 0x2029, 0x85: // line and paragraph separators, NEL
 		return newline
 	}
@@ -215,8 +227,10 @@ func Wrap(c Cleaned, source string) string {
 	b.WriteString(attr(source))
 	b.WriteByte('"')
 	if len(c.Notices) > 0 {
+		// Through attr like the source: a Cleaned built by hand rather than
+		// by Clean must not be able to close the header from a notice.
 		b.WriteString(` notices="`)
-		b.WriteString(strings.Join(c.Notices, ","))
+		b.WriteString(attr(strings.Join(c.Notices, ",")))
 		b.WriteByte('"')
 	}
 	if c.Truncated {
@@ -232,7 +246,7 @@ func Wrap(c Cleaned, source string) string {
 // attr makes a string safe inside a quoted marker attribute: cleaned like
 // any other text, one line, no quotes or brackets.
 func attr(s string) string {
-	s = Clean(s, 256).Text
+	s = strings.TrimSuffix(Clean(s, 256).Text, TruncationNote)
 	s = strings.NewReplacer("\"", "", "<", "", ">", "", "\n", " ").Replace(s)
 	return s
 }

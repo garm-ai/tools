@@ -30,8 +30,8 @@ the observation quieter and clearly marked:
 
 ## API
 
-`go get github.com/garm-ai/tools/sanitize@v0.1.0`; the git tag is
-`sanitize/v0.1.0`, and Go names a nested module's version without the
+`go get github.com/garm-ai/tools/sanitize@v0.1.1`; the git tag is
+`sanitize/v0.1.1`, and Go names a nested module's version without the
 prefix. The module depends on `golang.org/x/text` and nothing else.
 
 ```go
