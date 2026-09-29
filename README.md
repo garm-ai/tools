@@ -89,7 +89,7 @@ release of one package.
 | 9 | `documents` | `extract_document` for what was produced or uploaded | M | 8 |
 | 10 | garm contract | `effects.untrusted_output`: after a run reads untrusted content, an external write escalates to a human grant | M | 3 |
 | 11 | agentd | `ask_human`: a clarifying question with a ledger row | S | the inbox |
-| 12 | manifests | A researcher agent as the first end-to-end use | S | 3, 4, 6 or 7, 11 |
+| 12 | [`agents`](https://github.com/garm-ai/agents) | A researcher agent manifest as the first end-to-end use | S | 3, 4, 6 or 7, 11 |
 
 ### Later
 
