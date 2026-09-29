@@ -2,7 +2,7 @@
 
 ## Built
 
-Phase 1 is tagged: `taxonomy/v0.1.1`, `sanitize/v0.1.1`, `web/v0.1.1`.
+Phase 1 is tagged: `taxonomy/v0.2.0`, `sanitize/v0.1.1`, `web/v0.1.2`.
 
 - `taxonomy` - `internet`, `generated-artefacts`; `research`, `documents`, as a
   proto file a consumer copies and a Go module with the same four strings as
@@ -18,7 +18,34 @@ Phase 1 is tagged: `taxonomy/v0.1.1`, `sanitize/v0.1.1`, `web/v0.1.1`.
   sees; the wrapped response with notices; one attributed log line; `webd`;
   tests for every refusal class and an end-to-end test over an embedded NATS
   server with `Garm-Invocation`. Lints, builds a catalogue, mounts on a bare
-  deployment (`mise run check-web`).
+  deployment (`mise run check-web`), which now means garmd v0.3.0 or later.
+
+## Around the contract dependency
+
+- **`web.v1.WebService` names no `(garm.meta.v1.owner)`.** `garm lint` warns
+  `O1` on every build since the pin moved to v0.18.1, and it becomes an error
+  in a later release. It is not added here because `Owner.team` is "the unit
+  a ledger row is charged to" — the adopting organisation's answer, not this
+  repository's — and a placeholder charged to nobody is worse than a warning
+  that says so. Adding it also means vendoring `garm/meta/v1/meta.proto`,
+  which nothing here imports yet.
+- **Nothing warns that a vendored annotation has drifted from the module it
+  compiles against.** That hole is `garm`'s (`KNOWN-GAPS.md`, "Around the
+  contract dependency": `garm init` writes the contract's bytes and never
+  looks again), and it presented here as a green check over a stale tree:
+  `mise run vendor-check` compared `third_party/proto` against a version
+  *written in `mise.toml`*, so while `go.mod` sat five releases behind, the
+  check went on passing because it was comparing the tree to its own
+  constant. It now reads the version from `taxonomy/go.mod` and refuses if
+  the two modules require different ones — which closes it for this
+  repository and for nobody else. A consumer who copies these protos gets no
+  such check.
+- **Nothing here asserts a garmd floor.** `web`'s catalogue needs
+  garmd v0.3.0 or later, because the v0.18.1 generator synthesises two card
+  endpoints per tool and an older daemon refuses them. `mise run check-web`
+  runs against the pinned garmd only, so it proves the floor is met, not
+  where the floor is. The annotation schema version is still `v1`, so the
+  catalogue's own compatibility window does not express this.
 
 ## Not built, and why
 

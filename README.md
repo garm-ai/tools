@@ -6,7 +6,7 @@ served as NATS micro services behind [garmd](https://github.com/garm-ai/garmd),
 and maintained here. You take the packages you want and nothing else.
 
 Status, 29 September 2026: phase 1 (`taxonomy`, `sanitize`, `fetch_page`) is
-tagged: `taxonomy/v0.1.1`, `sanitize/v0.1.1`, `web/v0.1.1`. `KNOWN-GAPS.md`
+tagged: `taxonomy/v0.2.0`, `sanitize/v0.1.1`, `web/v0.1.1`. `KNOWN-GAPS.md`
 says what is built and what is deliberately not; the roadmap below says what
 arrives when.
 
@@ -52,7 +52,7 @@ buys an independence nobody asked for at the cost of N pipelines.
 
 | Package | Module | Tag | What it declares |
 |---|---|---|---|
-| `taxonomy/` | `github.com/garm-ai/tools/taxonomy` | `taxonomy/v0.1.1` | The compartments and tool sets the packages here share: `internet`, `generated-artefacts`; `research`, `documents` |
+| `taxonomy/` | `github.com/garm-ai/tools/taxonomy` | `taxonomy/v0.2.0` | The compartments and tool sets the packages here share: `internet`, `generated-artefacts`; `research`, `documents` |
 | `sanitize/` | `github.com/garm-ai/tools/sanitize` | `sanitize/v0.1.1` | Cleaning and wrapping text an attacker may have written, before a model reads it |
 | `web/` | `github.com/garm-ai/tools/web` | `web/v0.1.1` | `web.v1.fetch_page`: one public https page in, its readable text out, behind an allowlist and an SSRF floor |
 
@@ -64,7 +64,7 @@ The full set, planned and intended:
 
 | Package | What it gives an agent | Risk class | State |
 |---|---|---|---|
-| `taxonomy` | The shared vocabulary: `internet` and `generated-artefacts` compartments; `research` and `documents` tool sets | none | phase 1, tagged `taxonomy/v0.1.1` |
+| `taxonomy` | The shared vocabulary: `internet` and `generated-artefacts` compartments; `research` and `documents` tool sets | none | phase 1, tagged `taxonomy/v0.2.0` |
 | `sanitize` | Normalises untrusted content before it reaches a model: control characters, injection sentinels, length caps, an untrusted marker | none | phase 1, tagged `sanitize/v0.1.1` |
 | `web` | `fetch_page`: a governed page fetcher with a host allowlist and blocklist, an SSRF floor, redirect re-checks, text extraction | prompt injection, exfiltration | phase 1, tagged `web/v0.1.1` |
 | `web` | `search_web`: a search client whose results are filtered by the same host policy | prompt injection | planned, phase 2 |
@@ -88,7 +88,7 @@ release of one package.
 
 | Step | Package | Delivers | Effort | Depends on |
 |---|---|---|---|---|
-| 1 | `taxonomy` | The two compartments and two tool sets every later proto lints against | S | garm v0.14.2 |
+| 1 | `taxonomy` | The two compartments and two tool sets every later proto lints against | S | contracts v0.2.0 |
 | 2 | `sanitize` | The package every fetcher and generator reuses | S | none |
 | 3 | `web` | `fetch_page` with allow and block lists, SSRF floor, redirect re-checks | M | 1, 2, an egress policy at the deployment |
 
@@ -135,7 +135,7 @@ proto-dependency mechanism beyond buf:
    directory first and make the copy writable after:
 
    ```sh
-   mkdir -p proto && cp -R "$(go env GOMODCACHE)/github.com/garm-ai/tools/web@v0.1.1/proto/." proto/ && cp -R "$(go env GOMODCACHE)/github.com/garm-ai/tools/taxonomy@v0.1.1/proto/." proto/ && chmod -R u+w proto
+   mkdir -p proto && cp -R "$(go env GOMODCACHE)/github.com/garm-ai/tools/web@v0.1.1/proto/." proto/ && cp -R "$(go env GOMODCACHE)/github.com/garm-ai/tools/taxonomy@v0.2.0/proto/." proto/ && chmod -R u+w proto
    ```
 
    `garm lint` and `garm catalogue build` then see the declarations. (The
@@ -150,12 +150,40 @@ from the module cache into a temporary directory, then `garm lint` and
 `garm catalogue build` over that, so the commands above cannot regress.
 
 Then, as with any tool of your own: vendor the annotations once with
-`garm init` (garm v0.14.2 or later; under v0.15.0 `garm lint` warns `O1` that
-`web.v1.WebService` names no owner — a warning, not an error, until the pin
-here moves to v0.15.0 and the annotation is added), publish the catalogue with
-`garm catalogue publish`, run the package's service next to your own, let
-garmd mount it, and in an agent manifest allowlist the tools you want and add
-guards, for example `args.url.startsWith("https://docs.example.com/")`.
+`garm init`, publish the catalogue with `garm catalogue publish`, run the
+package's service next to your own, let garmd mount it, and in an agent
+manifest allowlist the tools you want and add guards, for example
+`args.url.startsWith("https://docs.example.com/")`.
+
+Three version floors go with that, and all three come from the split of the
+CLI from the contract:
+
+- **garm v0.18.1 or later**, CLI and `protoc-gen-garm-go` from the same
+  release. v0.18.0 renamed the Go import paths — the annotations and wire
+  types are `github.com/garm-ai/contracts` now, and the `contracts/` segment
+  that used to sit inside `github.com/garm-ai/garm` is gone — so a tree that
+  upgrades one and not the other generates imports of packages that no longer
+  exist. `garm init` writes four annotation files now (`tool`, `agent`,
+  `card`, `meta`); this repository vendors the two its protos import.
+- **garmd v0.3.0 or later.** `protoc-gen-garm-go` v0.18.1 synthesises an
+  input card and a result card beside every tool, so `web`'s catalogue
+  declares three tools where it declared one. A daemon that predates
+  `garm.card.v1` reads a card's own message as an undeclared tool and refuses
+  the whole mount. The annotation schema version is unchanged at `v1`, so
+  nothing in the catalogue's compatibility check warns about this; `mise run
+  check-web` is what catches it here.
+- **One contract module per binary.** `github.com/garm-ai/garm/contracts/...`
+  and `github.com/garm-ai/contracts/...` register the same descriptor file
+  paths. A service that links both compiles and then dies at startup in
+  `protoregistry`. Move your own imports, this repository's packages and
+  tool-go in one change; `tools` packages before `taxonomy/v0.2.0` and
+  `web/v0.1.1` are on the old path.
+
+`garm lint` still warns `O1` that `web.v1.WebService` names no
+`(garm.meta.v1.owner)` — a warning today and an error in a later release.
+`KNOWN-GAPS.md` records it: naming an owner names the team a ledger row is
+charged to, which is the adopting organisation's answer rather than this
+repository's.
 
 ## A package brings its own taxonomy
 

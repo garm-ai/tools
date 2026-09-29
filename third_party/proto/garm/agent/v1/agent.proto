@@ -6,7 +6,7 @@
 // garm.tool.v1 owns, so the two vocabularies can never collide.
 syntax = "proto3";
 package garm.agent.v1;
-option go_package = "github.com/garm-ai/garm/contracts/garm/agent/v1;agentv1";
+option go_package = "github.com/garm-ai/contracts/garm/agent/v1;agentv1";
 
 import "google/protobuf/any.proto";
 import "google/protobuf/descriptor.proto";

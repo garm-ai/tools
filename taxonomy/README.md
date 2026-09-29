@@ -4,6 +4,16 @@
 tool sets, declared once, here, and imported by every tool proto in this
 repository that names them.
 
+Status: tagged `taxonomy/v0.2.0`. The four names and their descriptions are
+unchanged from `v0.1.1`; the minor bump is the dependency changing identity.
+The annotations this package compiles against are
+`github.com/garm-ai/contracts` v0.2.0 rather than `github.com/garm-ai/garm`
+v0.14.2 — the same file paths, published from a module of their own since the
+CLI and the contract were split. **The two cannot be linked into one binary**:
+both register `garm/tool/v1/*.proto`, so a service holding this package at
+`v0.1.1` alongside anything on the new contract compiles and then dies in
+`protoregistry` at startup. Move in one step.
+
 ## The declarations
 
 | Kind | Name | Meaning |
@@ -21,7 +31,7 @@ a compartment says whose business it is.
 ## Adopting it
 
 Copy `proto/tools/taxonomy/v1/taxonomy.proto` into your proto tree (from the
-module cache, `$(go env GOMODCACHE)/github.com/garm-ai/tools/taxonomy@v0.1.1/proto/`;
+module cache, `$(go env GOMODCACHE)/github.com/garm-ai/tools/taxonomy@v0.2.0/proto/`;
 the cache is read-only and `cp -R` keeps its modes, so create the target
 directory first and `chmod -R u+w` it after — the repository README's
 "Adopting a package" has the exact commands) and import it from any proto that names one of these compartments or sets,
@@ -32,8 +42,8 @@ If your tree already declares one of these names with a different
 description, `garm catalogue build` fails naming both sources (L29). Adopt one
 definition or rename yours.
 
-The Go module — `go get github.com/garm-ai/tools/taxonomy@v0.1.1`; the git tag
-is `taxonomy/v0.1.1`, and Go names a nested module's version without the
+The Go module — `go get github.com/garm-ai/tools/taxonomy@v0.2.0`; the git tag
+is `taxonomy/v0.2.0`, and Go names a nested module's version without the
 prefix — gives you the same four strings as constants (`taxonomy.CompartmentInternet`
 and friends) so a claims file or a test never misspells one, and links the
 file descriptor so the declarations can be read off it.

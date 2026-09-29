@@ -7,7 +7,7 @@ modules:
   - path: web/proto
   # The garm annotations, vendored by `garm init`. A module of their own so
   # they are imported by their real path while staying OUT of what is
-  # generated: Go for them already exists in github.com/garm-ai/garm/contracts,
+  # generated: Go for them already exists in github.com/garm-ai/contracts,
   # and a second copy registering the same file panics at init.
   - path: third_party/proto
     lint:
