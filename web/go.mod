@@ -8,4 +8,5 @@ require (
 	github.com/garm-ai/tool-go v0.5.0
 	github.com/garm-ai/tools/taxonomy v0.1.1
 	google.golang.org/protobuf v1.36.12
+	gopkg.in/yaml.v3 v3.0.1
 )

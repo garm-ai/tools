@@ -4,15 +4,15 @@
 wrapped as untrusted.** The first tool of the Hermes port, and the model for
 every untrusted-content tool that follows it.
 
-Status: the contract is declared, lints, builds a catalogue and mounts; the
-service behind it is not built yet and the module is not tagged. `web/v0.1.0`
-arrives with `webd`.
+Status: the contract is declared, lints, builds a catalogue and mounts, and
+the policy file loads; the fetcher and `webd` are not built yet and the
+module is not tagged. `web/v0.1.0` arrives with `webd`.
 
 ```
 proto/web/v1/web.proto     the declaration: what the tool is, who may see it, what it returns
 gen/web/v1/                 the messages and the binding (`ServeWebService`), committed
-policy.example.yaml         the allow and block lists a deployment writes (Task 5)
-cmd/webd                    the service: connect, load the policy, register, run, drain (Task 9)
+policy.example.yaml         the allow and block lists a deployment writes
+cmd/webd                    the service: connect, load the policy, register, run, drain (arrives with the service)
 ```
 
 ## The annotation block, line by line
@@ -86,3 +86,22 @@ then copy `proto/` and the taxonomy's `proto/` into your tree (see the
 repository README). Your `main` registers
 `webv1.ServeWebService(svc, web.NewService(web.NewFetcher(policy)))` on a
 `garmtool` service, or you run `cmd/webd` as is.
+
+## The policy file
+
+`webd --policy policy.yaml`. See `policy.example.yaml` for every key. Three
+properties a reviewer should hold it to:
+
+- **Fail closed.** No `allow` entries, an unknown key (`alow:`), malformed
+  YAML, a cap out of range: the service does not start. There is no
+  blocklist-only mode. Hermes's `check_website_access` fails open on a
+  malformed policy so a typo cannot break every web tool; here a typo breaks
+  every fetch, at boot, where the operator is present.
+- **Block wins.** `block` is checked before `allow`, and a refusal names the
+  rule that matched — which the tool's `on_error` guidance promises the
+  model.
+- **Digest.** `policy_digest` on every response is sha256 over the sorted
+  allow and block entries, so a ledger row joins to the exact lists that
+  permitted a fetch. Caps do not enter the digest.
+
+A policy is loaded once. Reloading on a signal is a known gap.

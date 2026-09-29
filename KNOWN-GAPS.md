@@ -19,8 +19,12 @@ item from the list below to this one.
 ## Not built
 
 - `web`: the contract (`web.v1.fetch_page`) is declared, lints, builds a
-  catalogue and mounts; the service behind it — policy file, SSRF floor,
-  redirect re-check, extraction, the wrapped response, `webd` — arrives in
-  the next tasks.
+  catalogue and mounts, and the policy file loads (allow and block lists,
+  caps, digest; fail-closed on no allow entries, an unknown key, malformed
+  YAML or a cap out of range). The rest of the service — SSRF floor, redirect
+  re-check, extraction, the wrapped response, `webd` — arrives in the next
+  tasks.
+- `web`: a policy is loaded once at boot. Reloading on a signal is not built;
+  a change to the lists is a restart.
 - `payments/`, `identity/`, `compliance/`: the packages this repository was
   created for. Intent recorded in `README.md`; nothing seeded.

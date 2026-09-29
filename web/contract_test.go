@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"regexp"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -87,5 +88,27 @@ func TestTheResponseRedactsTheWayTheDesignSays(t *testing.T) {
 	def, _ := proto.GetExtension(mopts, toolv1.E_DefaultFieldPolicy).(*toolv1.FieldPolicy)
 	if def.GetRead() != toolv1.Clearance_CLEARANCE_INTERNAL || def.GetOnDeny().GetOmit() == nil {
 		t.Errorf("response default = %v, want INTERNAL with omit on deny", def)
+	}
+}
+
+// The binding is what a garmtool service registers, so the names it carries
+// are the ones garmd routes on: the FQN a manifest pins, the subject the hop
+// travels, and the descriptor hash a mismatched build would change.
+func TestTheBindingNamesTheToolTheWayTheDesignSays(t *testing.T) {
+	if len(webv1.WebServiceTools) != 1 {
+		t.Fatalf("WebServiceTools has %d entries, want 1", len(webv1.WebServiceTools))
+	}
+	ref := webv1.WebServiceTools[0]
+	if ref.FQN != "web.v1.fetch_page" {
+		t.Errorf("FQN = %q", ref.FQN)
+	}
+	if ref.Subject != "web.v1.WebService.FetchPage" {
+		t.Errorf("Subject = %q", ref.Subject)
+	}
+	if ref.Service != "web.v1.WebService" {
+		t.Errorf("Service = %q", ref.Service)
+	}
+	if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(webv1.DescriptorHash) {
+		t.Errorf("DescriptorHash = %q, want 64 lowercase hex characters", webv1.DescriptorHash)
 	}
 }

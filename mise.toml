@@ -161,6 +161,8 @@ set -e
 rm -rf build/proto && mkdir -p build/proto
 cp -R taxonomy/proto/. build/proto/
 cp -R web/proto/. build/proto/
+echo "assembled build/proto:"
+find build/proto -type f | sort
 """
 
 [tasks."lint-web"]

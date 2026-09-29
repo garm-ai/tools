@@ -1,0 +1,32 @@
+# The allow and block lists for fetch_page, per deployment. Loaded once at
+# boot; a file that cannot be read, has an unknown key, or allows no hosts
+# stops the service, because a fetcher that started on a policy it could not
+# read is a fetcher that fetches whatever it likes.
+#
+# A host is an exact name ("bankofengland.co.uk") or a wildcard over its
+# subdomains ("*.gov.uk", which matches www.gov.uk and a.b.gov.uk but not
+# gov.uk itself). Lower-case DNS labels only: no scheme, port or path.
+allow:
+  - "*.gov.uk"
+  - bankofengland.co.uk
+  - www.fca.org.uk
+
+# Checked first, in every case, and wins over allow.
+block:
+  - "*.internal.example-bank"
+
+# Not configurable, listed so a reviewer sees it: private, loopback,
+# link-local, carrier-grade NAT, multicast, reserved and documentation
+# ranges, every IPv6 range that embeds an IPv4 address, cloud metadata names
+# and addresses, localhost, .local, .internal, .arpa, Kubernetes service
+# names. Refused before DNS by name, and again on every resolved address and
+# every redirect hop.
+#
+# private_networks: deny
+
+# Caps. Each hop of a redirect is re-checked against everything above.
+max_redirects: 5
+max_body_bytes: 5242880
+max_chars: 15000          # ceiling on the request's char_limit; 2000..200000
+timeout: 20s
+user_agent: "garm-fetch/0.1 (+https://github.com/garm-ai/tools)"
