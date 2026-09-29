@@ -42,6 +42,14 @@ const maxTitleRunes = 200
 func (s *Service) FetchPage(ctx context.Context, req *webv1.FetchPageRequest) (*webv1.FetchPageResponse, error) {
 	start := s.f.now()
 	ic := callctx.FromContext(ctx)
+	if ic == nil {
+		// tool-go refuses an unattributed call before it reaches a
+		// handler; this is the service being safe without it, rather than
+		// fetching for nobody and ledgering an empty tenant.
+		err := refusal("400", "refused: no invocation context")
+		s.refused(ctx, []any{"tool", "fetch_page"}, err, start)
+		return nil, err
+	}
 	attrs := []any{
 		"tool", "fetch_page",
 		"tenant", ic.GetAttribution().GetTenant(),
@@ -71,12 +79,11 @@ func (s *Service) FetchPage(ctx context.Context, req *webv1.FetchPageRequest) (*
 
 	ex := extractText(pg.Body, pg.ContentType)
 	body := sanitize.Clean(ex.Text, limit)
-	final, _ := url.Parse(pg.FinalURL)
-	wrapped := sanitize.Wrap(body, origin(final))
+	wrapped := sanitize.Wrap(body, origin(pg.FinalURL))
 	sum := sha256.Sum256([]byte(wrapped))
 
 	resp := &webv1.FetchPageResponse{
-		FinalUrl:      proto.String(pg.FinalURL),
+		FinalUrl:      proto.String(pg.FinalURL.String()),
 		HttpStatus:    proto.Uint32(uint32(pg.Status)),
 		Content:       proto.String(wrapped),
 		Truncated:     proto.Bool(pg.Truncated || body.Truncated),

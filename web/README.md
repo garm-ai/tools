@@ -94,7 +94,9 @@ opens a subtree the way a browser opens one. Block elements start a line;
 `text/plain` body (with or without parameters) passes through untouched.
 What an external stylesheet or a class hides cannot be seen from the
 markup and is not dropped (see `KNOWN-GAPS.md`). `notices` repeats the sanitiser's annotations
-as data. `content_sha256` is over `content` as returned. `policy_digest`
+as data, over the content and the title together; the wrapper header
+carries the content's notices only, because it describes the text it
+encloses. `title` is cleaned like the content and cut at 200 characters. `content_sha256` is over `content` as returned. `policy_digest`
 identifies the lists in force, so a ledger row joins to the exact policy
 that permitted the fetch.
 
@@ -108,17 +110,32 @@ refused.
 | Code | When | The message names |
 |---|---|---|
 | `400` | the URL does not parse or has no host | nothing |
-| `403` | the scheme is not `https`; the URL carries credentials; the host is an IP literal, a local or metadata name, off the allowlist or on the blocklist; a host resolved to a non-public address; a redirect target failed any of these; more than `max_redirects` hops | the scheme, the host, or the matching rule; for a redirect, the target's **origin** only |
+| `403` | the scheme is not `https`; the URL carries credentials; the host is an IP literal, a local or metadata name, off the allowlist or on the blocklist; a host resolved to a non-public address; a redirect target failed any of these, had no host, could not be parsed, or was not `http`/`https`; more than `max_redirects` hops | the scheme, the host, or the matching rule; for a redirect, the target's **origin** only, capped at 256 characters, and only when its scheme is `http` or `https` |
 | `404` | upstream answered 404 | nothing |
-| `415` | the content type is not `text/html`, `application/xhtml+xml` or `text/plain` | the media type, or `"unknown"` if it was not one |
-| `502` | the host did not resolve, the connection failed, the body could not be read, or upstream answered any other 4xx/5xx | the host, or the status code |
-| `504` | the policy's `timeout` or the invocation's deadline passed | which clock ran out |
+| `415` | the content type is not `text/html`, `application/xhtml+xml` or `text/plain` | the media type if it is well known (`application/pdf`, `image/png`, ...), its top level with a wildcard (`text/*`) if only that is, else `"unknown"`; never the header's own words |
+| `502` | the host did not resolve, the connection failed, the body could not be read, or upstream answered any other 3xx/4xx/5xx (a 3xx without a `Location` is not a page) | the host, or the status code |
+| `504` | the policy's `timeout` or the invocation's deadline passed, or the invocation was cancelled | which clock ran out |
 
 A refusal message carries the host at most, never the path or the query,
 and never a byte of what upstream sent. The log line carries the tenant,
 subject and call id from `Garm-Invocation`, the host the caller asked for,
 and on a refusal the code alone: a redirect target is the page's choice
-and does not reach the log.
+and does not reach the log. A call that arrives with no invocation context
+is refused `400` before anything is resolved; tool-go refuses it earlier,
+and the service is safe without that.
+
+## The client
+
+The HTTP client is built once, around the policy, and is deliberately
+plain. No proxy, ever: `Proxy` is nil, never `ProxyFromEnvironment`,
+because a proxy carries the request past the floor. No cookie jar: a page
+cannot set state that a later fetch carries back. HTTP/1.1 only: the
+guarded dialer is the transport's `DialContext`, and one hop is one
+connection, one dial, one address check. The `Referer` header Go sets on
+every redirect hop is stripped before the hop is checked, so the caller's
+URL (query included) is never sent to a host the page chose. TLS is
+verified against the system roots. The `User-Agent` is the policy's
+`user_agent`. Idle connections close after 30 seconds.
 
 ## Adopting it
 

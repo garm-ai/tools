@@ -74,6 +74,31 @@ func fakeInternet() http.Handler {
 	mux.HandleFunc("/r/loop/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "https://example.com"+r.URL.Path+"x", http.StatusFound)
 	})
+	mux.HandleFunc("/ct-probe", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/BODYSECRET-PLOVER; x=1")
+		fmt.Fprint(w, "probe")
+	})
+	mux.HandleFunc("/ct-odd", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "zzz/thing")
+		fmt.Fprint(w, "probe")
+	})
+	mux.HandleFunc("/echo-referer", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprintf(w, "<p>referer-header:%q</p>", r.Header.Get("Referer"))
+	})
+	mux.HandleFunc("/r/to-echo", redirect("https://example.com/echo-referer"))
+	mux.HandleFunc("/r/nowhere", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusFound) })
+	// Raw Location headers: http.Redirect would clean these up.
+	rawLocation := func(to string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Location", to)
+			w.WriteHeader(http.StatusFound)
+		}
+	}
+	mux.HandleFunc("/r/to-nohost", rawLocation("https:///nohost"))
+	mux.HandleFunc("/r/to-unparseable", rawLocation("https://example.com/%zz"))
+	mux.HandleFunc("/r/to-ftp", rawLocation("ftp://example.com/"))
+	mux.HandleFunc("/r/to-long", rawLocation("https://"+strings.Repeat("a", 300)+".example.com/"))
 	return mux
 }
 
@@ -398,5 +423,76 @@ func TestTheLogLineNamesTheCallerAndNothingFromThePage(t *testing.T) {
 	}
 	if strings.Contains(line, "blocked.example.com") {
 		t.Errorf("the redirect target, which the page chose, reached the log:\n%s", line)
+	}
+}
+
+func TestAnUnknownContentTypeIsNotEchoed(t *testing.T) {
+	h := newHarness(t, testPolicyYAML)
+	_, err := call(invocation(), h.svc, "https://example.com/ct-probe", 0)
+	expect(t, err, "415", `unsupported content type "text/*"`)
+	if _, m := code(t, err); strings.Contains(strings.ToLower(m), "plover") || strings.Contains(strings.ToLower(m), "bodysecret") {
+		t.Errorf("the upstream content type reached the refusal: %q", m)
+	}
+	_, err = call(invocation(), h.svc, "https://example.com/ct-odd", 0)
+	expect(t, err, "415", `unsupported content type "unknown"`)
+}
+
+func TestTheRefererIsNotSentOnARedirect(t *testing.T) {
+	h := newHarness(t, testPolicyYAML)
+	resp, err := call(invocation(), h.svc, "https://example.com/r/to-echo?token=SECRET-QUERY", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := resp.GetContent()
+	if !strings.Contains(c, `referer-header:""`) || strings.Contains(c, "SECRET-QUERY") {
+		t.Errorf("the redirect target saw a Referer:\n%s", c)
+	}
+}
+
+func TestARedirectWithoutALocationIsNotAPage(t *testing.T) {
+	h := newHarness(t, testPolicyYAML)
+	_, err := call(invocation(), h.svc, "https://example.com/r/nowhere", 0)
+	expect(t, err, "502", "upstream answered 302")
+}
+
+func TestEveryRedirectRefusalIs403AndEchoesNoLocation(t *testing.T) {
+	h := newHarness(t, testPolicyYAML)
+	for _, tc := range []struct{ path, absent string }{
+		{"/r/to-nohost", "nohost"},
+		{"/r/to-unparseable", "%zz"},
+		{"/r/to-ftp", "ftp"},
+		{"/r/to-long", strings.Repeat("a", 64)},
+	} {
+		_, err := call(invocation(), h.svc, "https://example.com"+tc.path, 0)
+		expect(t, err, "403", "redirect")
+		if _, m := code(t, err); strings.Contains(m, tc.absent) || len(m) > 300 {
+			t.Errorf("%s: the page-chosen target reached the refusal: %q", tc.path, m)
+		}
+	}
+	if d := h.site.dials(); len(d) != 1 {
+		t.Errorf("dialled %v; only the first hop may connect", d)
+	}
+}
+
+func TestACallWithoutAnInvocationContextIsRefused(t *testing.T) {
+	h := newHarness(t, testPolicyYAML)
+	_, err := call(context.Background(), h.svc, "https://example.com/", 0)
+	expect(t, err, "400", "no invocation context")
+	if n := h.site.resolved(); len(n) != 0 {
+		t.Errorf("DNS was consulted for an unattributed call: %v", n)
+	}
+	if !strings.Contains(h.log.String(), "code=400") {
+		t.Errorf("the refusal was not logged:\n%s", h.log.String())
+	}
+}
+
+func TestACancelledInvocationIsNotATimeout(t *testing.T) {
+	h := newHarness(t, "allow: [example.com]\ntimeout: 30s\n")
+	ctx, cancel := context.WithCancel(invocation())
+	cancel()
+	_, err := call(ctx, h.svc, "https://example.com/slow", 0)
+	expect(t, err, "504", "cancelled")
+	if _, m := code(t, err); strings.Contains(m, "deadline") || strings.Contains(m, "timed out") {
+		t.Errorf("a cancellation was reported as a timeout: %q", m)
 	}
 }

@@ -51,6 +51,10 @@ item from the list below to this one.
 - `web`: the guarded dialer connects to the first vetted address only. A host
   whose first address is unreachable is not retried on its second; the fetch
   fails and the caller retries.
+- `web`: ports are not restricted. Any port on an allowed host is dialled
+  (`https://www.example.com:8443/` passes the same checks as `:443`); the
+  floor is on the address, not the port. A policy knob (`ports:` or a
+  443-only default) is a follow-up.
 - `web`: a policy is loaded once at boot. Reloading on a signal is not built;
   a change to the lists is a restart.
 - `payments/`, `identity/`, `compliance/`: the packages this repository was
