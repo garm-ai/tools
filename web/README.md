@@ -111,7 +111,8 @@ encloses. `title` is cleaned like the content and cut at 200 characters.
 `final_url` is where the fetch ended: origin and path, never the query or
 the fragment, because after a redirect it is the page's choice; the path is
 percent-encoded, the whole is cleaned like the title (its notices join
-`notices`) and cut at 2048 characters, the request URL's own limit.
+`notices`) and cut at 2048 characters, the request URL's own limit — a cut
+`final_url` sets `truncated`, like a cut body.
 `content_sha256` is over `content` as returned. `policy_digest`
 identifies the lists in force, so a ledger row joins to the exact policy
 that permitted the fetch.
@@ -126,7 +127,7 @@ refused.
 | Code | When | The message names |
 |---|---|---|
 | `400` | the URL does not parse or has no host; the call arrived with no invocation context | nothing |
-| `403` | the scheme is not `https`; the URL carries credentials; the host is an IP literal, a local or metadata name, off the allowlist or on the blocklist; a host resolved to a non-public address; a redirect target failed any of these, had no host, could not be parsed, was not `http`/`https`, or had a host that is neither a DNS name nor an IP literal (`url.Parse` accepts `<`, `>`, `"` and raw UTF-8 in a host; DNS does not); more than `max_redirects` hops | the scheme, the host, or the matching rule; for a redirect, the target's **origin** only, quoted, capped at 256 characters, and only when its scheme is `http` or `https` and its host is a name or an IP literal — otherwise a fixed message and nothing of the target |
+| `403` | the scheme is not `https`; the URL carries credentials; the host is an IP literal, a local or metadata name, off the allowlist or on the blocklist; a host resolved to a non-public address; a redirect target failed any of these, had no host, could not be parsed, was not `http`/`https`, or had a host that is neither a DNS name nor an IP literal (`url.Parse` accepts `<`, `>`, `"`, `_`, raw UTF-8 and an IPv6 zone after `%` in a host; DNS does not); more than `max_redirects` hops | the scheme, the host, or the matching rule; for a redirect, the target's **origin** only, quoted, capped at 256 characters, and only when its scheme is `http` or `https` and its host is a name or an IP literal — otherwise a fixed message and nothing of the target |
 | `404` | upstream answered 404 | nothing |
 | `415` | the content type is not `text/html`, `application/xhtml+xml` or `text/plain` | the media type if it is well known (`application/pdf`, `image/png`, ...), its top level with a wildcard (`text/*`) if only that is, else `"unknown"`; never the header's own words |
 | `502` | the host did not resolve, the connection failed, the body could not be read, or upstream answered any other 3xx/4xx/5xx (a 3xx without a `Location` is not a page) | the host, or the status code |

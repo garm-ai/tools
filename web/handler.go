@@ -87,7 +87,7 @@ func (s *Service) FetchPage(ctx context.Context, req *webv1.FetchPageRequest) (*
 		FinalUrl:      proto.String(final.Text),
 		HttpStatus:    proto.Uint32(uint32(pg.Status)),
 		Content:       proto.String(wrapped),
-		Truncated:     proto.Bool(pg.Truncated || body.Truncated),
+		Truncated:     proto.Bool(pg.Truncated || body.Truncated || final.Truncated),
 		ContentSha256: proto.String(hex.EncodeToString(sum[:])),
 		PolicyDigest:  proto.String(s.f.policy.Digest()),
 		FetchedAt:     proto.String(start.UTC().Format(time.RFC3339)),
@@ -126,6 +126,9 @@ const maxFinalURLRunes = 2048
 func finalURL(u *url.URL) sanitize.Cleaned {
 	c := sanitize.Clean(u.Scheme+"://"+u.Host+u.EscapedPath(), maxFinalURLRunes)
 	c.Text = strings.TrimSuffix(c.Text, sanitize.TruncationNote)
+	// A cut final_url says so: c.Truncated is folded into the response's
+	// truncated flag by the caller, so a reader cannot mistake a cut path
+	// for the whole one.
 	return c
 }
 

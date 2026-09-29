@@ -81,8 +81,12 @@ var hostName = regexp.MustCompile(`^` + hostLabels + `$`)
 // only two shapes a refusal may echo. Everything url.Parse accepts in a
 // host beyond these is not a host.
 func isHostName(host string) bool {
-	if _, err := netip.ParseAddr(host); err == nil {
-		return true
+	if a, err := netip.ParseAddr(host); err == nil {
+		// An IPv6 zone ("fe80::1%eth0") is free text to netip and to
+		// net/url, which lets a bracketed host carry spaces and brackets
+		// after the '%'. A zone names an interface on THIS machine; a
+		// fetch never wants one, and echoing one would echo the page.
+		return a.Zone() == ""
 	}
 	return hostName.MatchString(host)
 }
