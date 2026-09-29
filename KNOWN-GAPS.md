@@ -18,7 +18,9 @@ item from the list below to this one.
 
 ## Not built
 
-- `web`: `fetch_page`, its policy file, the SSRF floor, the redirect re-check,
-  extraction, the wrapped response, `webd`.
+- `web`: the contract (`web.v1.fetch_page`) is declared, lints, builds a
+  catalogue and mounts; the service behind it — policy file, SSRF floor,
+  redirect re-check, extraction, the wrapped response, `webd` — arrives in
+  the next tasks.
 - `payments/`, `identity/`, `compliance/`: the packages this repository was
   created for. Intent recorded in `README.md`; nothing seeded.

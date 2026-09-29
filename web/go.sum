@@ -1,0 +1,12 @@
+buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260825204119-511051f7f437.2 h1:NbnlmV26O7oZ1iM5tsCI+GEx+3ZSdrhvnKQ/eWSrLiY=
+buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260825204119-511051f7f437.2/go.mod h1:TCt1lluMFnctISJXvkIQ4x3ABrPuUKCWKyjKdkJNBpw=
+github.com/garm-ai/garm v0.14.2 h1:QAVAFzd4EpBHVNPjVWdwKWCWkl6BOWLgjPQBcBoL2Wo=
+github.com/garm-ai/garm v0.14.2/go.mod h1:6XZkE7k/Z4N5G/CHYYj93pvidwkhMU11bFz/Z+Cnyxg=
+github.com/garm-ai/tool-go v0.5.0 h1:ad4IWKi+xjO0Kws6oOLjcsAAWkPjLuM/1QZiX5dzgM0=
+github.com/garm-ai/tool-go v0.5.0/go.mod h1:F1ax+TgDAV8sbrc1ZZyDzjt7Q9gk5hh90bhWwYPVh3Q=
+github.com/garm-ai/tools/taxonomy v0.1.1 h1:QzksdJ6sJEVHgQDFw/L+7Z82PUSi0Rmy4bJjDvedH9A=
+github.com/garm-ai/tools/taxonomy v0.1.1/go.mod h1:4Ll/N7GNv3xiXTkb49BdfXvD51z7y1NuCSWMHz97+NY=
+github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
+google.golang.org/protobuf v1.36.12 h1:pJOKDDOyeXErUroCihFAd5LQuwXBSpVnKGrj5o/fwxc=
+google.golang.org/protobuf v1.36.12/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=

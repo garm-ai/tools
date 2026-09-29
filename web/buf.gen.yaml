@@ -1,0 +1,19 @@
+version: v2
+inputs:
+  - directory: proto
+plugins:
+  - remote: buf.build/protocolbuffers/go:v1.36.12
+    out: gen
+    opt: paths=source_relative
+    include_imports: false
+  # The tool-side binding. No connect plugin: this service is reached over
+  # NATS by a daemon that never speaks connect to it.
+  #
+  # contract_version stamps what the service advertises; bump it with the
+  # package tag. buf runs the plugin once per directory, so lint rule A3 (an
+  # agent's allowlist) is a warning here and an error in `garm lint` and
+  # `garm catalogue build`, which see the whole tree — this package declares
+  # no agent, so nothing is lost.
+  - local: protoc-gen-garm-go
+    out: gen
+    opt: paths=source_relative,emit=toolsdk,contract_version=v0.1.0

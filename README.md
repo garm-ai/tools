@@ -128,13 +128,13 @@ proto-dependency mechanism beyond buf:
    service.
 2. Copy the package's proto tree, and the taxonomy's, into your own:
    `cp -R "$(go env GOMODCACHE)/github.com/garm-ai/tools/web@v0.1.0/proto/." proto/`
-   and the same for `taxonomy@v0.1.0`. `garm lint` and `garm catalogue build`
+   and the same for `taxonomy@v0.1.1`. `garm lint` and `garm catalogue build`
    then see the declarations. (The module cache is the same bytes your build
    links, so the proto and the binding cannot disagree.)
 
-This repository's own CI does exactly that once a package exists: `mise run
-assemble` copies the packages' trees into `build/proto`, and lint, catalogue
-and mount check run over it.
+This repository's own CI does exactly that: `mise run assemble` copies the
+packages' trees into `build/proto`, and `garm lint`, `garm catalogue build`
+and `garmd check` run over it (`lint-web`, `catalogue-web`, `check-web`).
 
 Then, as with any tool of your own: vendor the annotations once with
 `garm init` (garm v0.14.2 or later), publish the catalogue with
@@ -204,9 +204,9 @@ Go 1.26, `mise` for the toolchain, `buf` for protos.
 
 ```
 mise install          the toolchain
-mise run ci           what CI runs: vendor-check, buf-lint, lint-taxonomy, lint, build, test,
-                      tidy-check, acceptance, gen-check
-                      plus lint-web, catalogue-web, check-web once those exist
+mise run ci           what CI runs: vendor-check, buf-lint, lint-taxonomy, lint-web,
+                      check-web (which builds the catalogue first), lint, build,
+                      test, tidy-check, acceptance, gen-check
 mise run gen          regenerate the committed Go from the protos
 ```
 

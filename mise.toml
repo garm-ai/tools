@@ -107,21 +107,40 @@ dir = "taxonomy"
 depends = ["plugin"]
 run = "buf generate"
 
+[tasks."gen-web"]
+dir = "web"
+depends = ["plugin"]
+run = "buf generate"
+
 [tasks.gen]
 description = "Regenerate Go from the protos"
 depends = ["plugin"]
-run = ["mise run gen-taxonomy"]
+run = ["mise run gen-taxonomy", "mise run gen-web"]
 
 [tasks."gen-check"]
 description = "Fail if the committed generated code is stale"
 # Generated code is COMMITTED, because a Go module has to build from its own
 # source: a consumer runs `go build`, not buf plus two plugins. The cost of
-# committing is drift, and this is the check that pays it.
+# committing is drift, and this is the check that pays it. A generated file
+# that exists but was never added is stale in the same way, so the untracked
+# check is there beside the diff. ls-files --others, not status: status
+# folds an untracked module into one "?? web/" line that no pathspec under
+# it matches, and lists staged files too, which are not stale.
+#
+# wait_for, not depends: mise runs a task's dependencies in parallel, and
+# `buf generate` rewriting a .pb.go while `go build` reads it is a flaky red.
+# This runs after build, test, lint and acceptance when ci schedules them.
+wait_for = ["build", "test", "lint", "acceptance"]
 run = """
 mise run gen
 if ! git diff --quiet -- taxonomy/gen web/gen; then
   echo "generated code is stale — run 'mise run gen' and commit:" >&2
   git diff --stat -- taxonomy/gen web/gen >&2
+  exit 1
+fi
+if [ -n "$(git ls-files --others --exclude-standard -- '*/gen/*')" ]; then
+  echo "generated code is untracked — run 'git add' on:" >&2
+  git ls-files --others --exclude-standard -- '*/gen/*' >&2
   exit 1
 fi
 """
@@ -131,5 +150,37 @@ description = "garm lint over the taxonomy alone"
 depends = ["cli"]
 run = "garm lint --proto taxonomy/proto"
 
+[tasks.assemble]
+description = "Copy every package's proto tree into build/proto, which is what a consumer's tree looks like"
+# garm lint and garm catalogue build take ONE proto root and resolve imports
+# from it (internal/compile: a SourceResolver over the root). web.proto
+# imports the taxonomy from another package, so the two trees are joined
+# here, the way an adopter joins them in their own repository.
+run = """
+set -e
+rm -rf build/proto && mkdir -p build/proto
+cp -R taxonomy/proto/. build/proto/
+cp -R web/proto/. build/proto/
+"""
+
+[tasks."lint-web"]
+description = "garm lint over the assembled tree"
+depends = ["cli", "assemble"]
+run = "garm lint --proto build/proto"
+
+[tasks."catalogue-web"]
+description = "Build the fetch_page catalogue from the assembled tree"
+depends = ["cli", "assemble"]
+run = "garm catalogue build --proto build/proto -o build/web.binpb --source garm-ai/tools/web"
+
+[tasks."check-web"]
+description = "Assert the fetch_page catalogue mounts on a bare deployment"
+# fetch_page declares no approval and audit LEVEL_LEDGER only, so a garmd
+# with no grant verifier and no audit sink must mount it. A refusal here
+# means an annotation drifted into something this tool has no business
+# declaring.
+depends = ["catalogue-web", "daemon"]
+run = "garmd check --catalogue build/web.binpb"
+
 [tasks.ci]
-depends = ["vendor-check", "buf-lint", "lint-taxonomy", "lint", "build", "test", "tidy-check", "acceptance", "gen-check"]
+depends = ["vendor-check", "buf-lint", "lint-taxonomy", "lint-web", "check-web", "lint", "build", "test", "tidy-check", "acceptance", "gen-check"]
