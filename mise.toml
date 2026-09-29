@@ -1,0 +1,106 @@
+# Toolchain and tasks for garm-ai/tools. Task names match every other garm-ai
+# repository. Each package is its own Go module; go.work joins them for the
+# root-level tasks, and the per-module tasks run with GOWORK=off so that
+# nothing here can pass because of a sibling that was never tagged.
+[tools]
+go = "1.26"
+buf = "1"
+
+[tasks.cli]
+description = "Install the garm CLI at the pinned version"
+# Pinned, not @latest: the catalogue digest must not move because someone
+# upgraded a CLI on a laptop.
+run = "go install github.com/garm-ai/garm/cmd/garm@v0.14.2"
+
+[tasks.plugin]
+description = "Install the tool generator at the pinned version"
+# The generated binding carries a descriptor hash; a generator that moved
+# under you changes committed output for no reason anyone asked for.
+run = "go install github.com/garm-ai/garm/cmd/protoc-gen-garm-go@v0.14.2"
+
+[tasks.daemon]
+description = "Install garmd at the pinned version, for the mount check"
+# v0.2.0: the first tag that sends Garm-Invocation on the hop, which tool-go
+# v0.5.0 requires.
+run = "go install github.com/garm-ai/garmd/cmd/garmd@v0.2.0"
+
+[tasks."vendor-check"]
+description = "Fail if the vendored garm annotations differ from garm v0.14.2"
+# `garm init` writes the annotations verbatim from the module, so drift is a
+# byte comparison. Run from taxonomy/ because `go mod download` needs a
+# module, and taxonomy is the one that requires garm.
+dir = "taxonomy"
+run = """
+set -e
+VERSION=v0.14.2
+GOWORK=off go mod download github.com/garm-ai/garm@$VERSION
+SRC="$(go env GOMODCACHE)/github.com/garm-ai/garm@$VERSION/proto/garm"
+for f in tool/v1/tool.proto agent/v1/agent.proto; do
+  if ! cmp -s "$SRC/$f" "../third_party/proto/garm/$f"; then
+    echo "third_party/proto/garm/$f differs from garm $VERSION; re-run garm init in an empty directory and copy the file" >&2
+    exit 1
+  fi
+done
+echo "ok: vendored annotations match garm $VERSION"
+"""
+
+[tasks."buf-lint"]
+description = "buf lint over the workspace"
+run = "buf lint"
+
+[tasks.build]
+# Import-path patterns, not ./...: from a workspace root with no go.mod of its
+# own, ./... matches no module. github.com/garm-ai/tools/... matches every
+# package of every module go.work lists.
+run = "go build github.com/garm-ai/tools/..."
+
+[tasks.test]
+description = "Run every module's tests, including the end-to-end one over an embedded NATS"
+# -timeout because Go's default is ten minutes, and a test waiting on a
+# service that never answers will sit there for all of it.
+run = "go test github.com/garm-ai/tools/... -race -count=1 -timeout 120s"
+
+[tasks.lint]
+run = """
+set -e
+go vet github.com/garm-ai/tools/...
+if [ -n "$(gofmt -l taxonomy sanitize web 2>/dev/null)" ]; then
+  echo "gofmt:" >&2; gofmt -l taxonomy sanitize web >&2; exit 1
+fi
+"""
+
+[tasks."tidy-check"]
+description = "Fail if any module's go.mod or go.sum is not tidy on its own, without the workspace"
+run = """
+set -e
+for m in taxonomy sanitize web; do
+  [ -f "$m/go.mod" ] || continue
+  (cd "$m" && GOWORK=off go mod tidy -diff) || { echo "$m is not tidy: run (cd $m && GOWORK=off go mod tidy)" >&2; exit 1; }
+done
+echo "ok: every module is tidy on its own"
+"""
+
+[tasks.acceptance]
+description = "Each module builds and tests against published tags alone, with no replace and no path to the daemon"
+# This is the README's promise made testable: a consumer depends on
+# garm-ai/tools/<package>@vX and nothing else. GOWORK=off means a sibling in
+# the working tree cannot stand in for a tag that was never pushed.
+run = """
+set -e
+for m in taxonomy sanitize web; do
+  [ -f "$m/go.mod" ] || continue
+  if grep -Eq '^\\s*replace\\s' "$m/go.mod"; then
+    echo "$m/go.mod carries a replace directive; it is not building against published artifacts" >&2
+    exit 1
+  fi
+  (cd "$m" && GOWORK=off go build ./... && GOWORK=off go test ./... -count=1 -timeout 120s)
+  if (cd "$m" && GOWORK=off go list -deps ./... 2>/dev/null | grep -q 'garm-ai/garmd'); then
+    echo "$m reaches garmd; a tool service must not be able to enforce" >&2
+    exit 1
+  fi
+done
+echo "ok: every module stands on tags alone"
+"""
+
+[tasks.ci]
+depends = ["vendor-check", "buf-lint", "lint", "build", "test", "tidy-check", "acceptance"]

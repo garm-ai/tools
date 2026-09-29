@@ -1,23 +1,24 @@
 # garm tools
 
-**Governed tool packages you adopt instead of writing.** Each package is a set
-of tools declared in proto, annotated with the `garm.tool.v1` contract, served
-as NATS micro services behind [garmd](https://github.com/garm-ai/garmd), and
-maintained here. You take the packages you want and nothing else.
+**Tool packages you can adopt instead of writing.** Each package is a set of
+governed tools declared in proto, annotated with the `garm.tool.v1` contract,
+served as NATS micro services behind [garmd](https://github.com/garm-ai/garmd),
+and maintained here. You take the packages you want and nothing else.
 
-Status, 29 September 2026: the first three packages are planned and in
-implementation. Nothing here is released yet. The roadmap below says what
-arrives when.
+Status, 29 September 2026: phase 1 (`taxonomy`, `sanitize`, `fetch_page`) is
+in implementation. Nothing here is released yet. `KNOWN-GAPS.md` says what is
+built; the roadmap below says what arrives when.
 
 ## Contents
 
 - [What a package is](#what-a-package-is)
-- [Packages](#packages)
+- [What is here](#what-is-here)
 - [Roadmap](#roadmap)
 - [Adopting a package](#adopting-a-package)
+- [A package brings its own taxonomy](#a-package-brings-its-own-taxonomy)
 - [What a governed tool looks like](#what-a-governed-tool-looks-like)
 - [Safety model](#safety-model)
-- [Building, testing, releasing](#building-testing-releasing)
+- [Working here](#working-here)
 - [How this differs from examples](#how-this-differs-from-examples)
 - [Contributing](#contributing)
 - [Licence](#licence)
@@ -28,25 +29,40 @@ One directory, one Go module, one release train. A package holds:
 
 - the proto files that declare its tools and the annotations garmd enforces;
 - the service that serves them, on [tool-go](https://github.com/garm-ai/tool-go);
-- the compartments and tool sets it needs, declared once in its taxonomy;
+- the compartments and tool sets it needs, declared once in `taxonomy`;
 - tests over a real broker, sending the invocation context garmd sends;
 - a README that explains every annotation choice in plain words.
 
-You depend on `github.com/garm-ai/tools/web@v0.1.0`, not on this repository.
-One repository keeps one CI and one review standard; per-package modules keep
-your dependency to what you asked for.
+One repository, **per-package adoption**. Each package is its own Go module,
+tagged `<package>/vX.Y.Z`. You depend on `github.com/garm-ai/tools/web@web/v0.1.0`,
+not on this repository, and you inherit only what that package needs: `web`
+brings `taxonomy` (the vocabulary its tool names) and `sanitize` (the wrapper
+its response uses), both tagged packages of this repository, and nothing
+else. One CI and one release train here; no inherited tools there.
 
 Separate repositories per package were considered and rejected: these packages
-change together far more than apart, and N repositories buys an independence
-nobody asked for at the cost of N pipelines.
+change together far more often than they change apart, and N repositories
+buys an independence nobody asked for at the cost of N pipelines.
 
-## Packages
+## What is here
+
+| Package | Module | Tag | What it declares |
+|---|---|---|---|
+| `taxonomy/` | `github.com/garm-ai/tools/taxonomy` | in progress | The compartments and tool sets the packages here share: `internet`, `generated-artefacts`; `research`, `documents` |
+| `sanitize/` | `github.com/garm-ai/tools/sanitize` | in progress | Cleaning and wrapping text an attacker may have written, before a model reads it |
+| `web/` | `github.com/garm-ai/tools/web` | in progress | `web.v1.fetch_page`: one public https page in, its readable text out, behind an allowlist and an SSRF floor |
+
+`payments/`, `identity/` and `compliance/` are the packages this repository
+was created for and are not yet seeded; the three above are the first
+release train because a research agent needs them first.
+
+The full set, planned and intended:
 
 | Package | What it gives an agent | Risk class | State |
 |---|---|---|---|
-| `taxonomy` | The shared vocabulary: `internet` and `generated-artefacts` compartments; `research` and `documents` tool sets | none | planned, phase 1 |
-| `sanitize` | Normalises untrusted content before it reaches a model: control characters, injection sentinels, length caps, an untrusted marker | none | planned, phase 1 |
-| `web` | `fetch_page`: a governed page fetcher with a host allowlist and blocklist, an SSRF floor, redirect re-checks, text extraction | prompt injection, exfiltration | planned, phase 1 |
+| `taxonomy` | The shared vocabulary: `internet` and `generated-artefacts` compartments; `research` and `documents` tool sets | none | phase 1, in progress |
+| `sanitize` | Normalises untrusted content before it reaches a model: control characters, injection sentinels, length caps, an untrusted marker | none | phase 1, in progress |
+| `web` | `fetch_page`: a governed page fetcher with a host allowlist and blocklist, an SSRF floor, redirect re-checks, text extraction | prompt injection, exfiltration | phase 1, in progress |
 | `web` | `search_web`: a search client whose results are filtered by the same host policy | prompt injection | planned, phase 2 |
 | `artefacts` | An object store for generated files with `get`, `list` and `delete`, owner-only until the authorization graph lands | data exposure | planned, phase 2 |
 | `documents` | `create_html_document`, `create_workbook` (Excel) | data exposure | planned, phase 2 |
@@ -104,19 +120,39 @@ first.
 
 ## Adopting a package
 
-1. Vendor the annotations once with `garm init` (garm v0.14.2 or later).
-2. Add the package's proto directory to your `buf.yaml` as a dependency and
-   the module to your `go.mod`, for example `github.com/garm-ai/tools/web@v0.1.0`.
-3. Run `garm lint` and `garm catalogue build`. The package's taxonomy merges
-   with yours; an identical declaration merges silently, a different one fails
-   the build naming both sources. Adopt one definition or rename yours.
-4. Publish the catalogue with `garm catalogue publish`, run the package's
-   service next to your own, and let garmd mount it.
-5. In an agent manifest, allowlist the tools you want and add guards, for
-   example `args.url.startsWith("https://docs.example.com/")`.
+Two steps, because garm builds a catalogue from one proto tree and has no
+proto-dependency mechanism beyond buf:
 
-A package brings its own taxonomy, and that coupling is opt-in by the act of
-adoption. Nothing here is imposed on a catalogue that does not ask for it.
+1. `go get github.com/garm-ai/tools/web@web/v0.1.0` — the generated messages
+   and the `ServeWebService` binding your `main` registers on a `garmtool`
+   service.
+2. Copy the package's proto tree, and the taxonomy's, into your own:
+   `cp -R "$(go env GOMODCACHE)/github.com/garm-ai/tools/web@v0.1.0/proto/." proto/`
+   and the same for `taxonomy@v0.1.0`. `garm lint` and `garm catalogue build`
+   then see the declarations. (The module cache is the same bytes your build
+   links, so the proto and the binding cannot disagree.)
+
+This repository's own CI does exactly that once a package exists: `mise run
+assemble` copies the packages' trees into `build/proto`, and lint, catalogue
+and mount check run over it.
+
+Then, as with any tool of your own: vendor the annotations once with
+`garm init` (garm v0.14.2 or later), publish the catalogue with
+`garm catalogue publish`, run the package's service next to your own, let
+garmd mount it, and in an agent manifest allowlist the tools you want and add
+guards, for example `args.url.startsWith("https://docs.example.com/")`.
+
+## A package brings its own taxonomy
+
+`taxonomy/` declares the compartments and tool sets the tools here require.
+Adopting a package means adopting that vocabulary, and that coupling is
+**opt-in, by the act of adoption**. Nothing here is imposed on a catalogue
+that does not ask for it.
+
+If a package and your own protos both declare a compartment, identical
+declarations merge and any difference fails your catalogue build, naming both
+sources (lint rule L29). Adopt one definition or rename yours; nothing is
+silently resolved.
 
 ## What a governed tool looks like
 
@@ -162,15 +198,26 @@ read a field, not what a value may be.
 - **Approval where money or messages move.** Anything that leaves the
   perimeter is approval-gated with material fields, the same way a payment is.
 
-## Building, testing, releasing
+## Working here
 
-- Go 1.26, `mise` for the toolchain, `buf` for protos.
-- `mise run ci` in a package runs lint, vet, the unit tests, `garm lint`,
-  `garm catalogue build` and a mount check against a pinned garmd.
-- Tests run over an embedded NATS server and send the `Garm-Invocation` header
-  the way garmd does; no test talks to the internet.
-- Releases are per-package tags, for example `web/v0.1.0`. A package's README
-  states what changed and what its annotations mean.
+Go 1.26, `mise` for the toolchain, `buf` for protos.
+
+```
+mise install          the toolchain
+mise run ci           what CI runs: vendor-check, buf-lint, lint, build, test, tidy-check, acceptance
+                      plus lint-taxonomy, lint-web, catalogue-web, check-web, gen-check once those exist
+```
+
+Each module is tidied on its own: `(cd web && GOWORK=off go mod tidy)`. A
+`go.work` at the root joins the modules for `mise run test` (which runs
+`go test github.com/garm-ai/tools/...`); `mise run acceptance` builds and
+tests each one with `GOWORK=off`, which is the README's promise made testable.
+No `replace` directive is ever committed.
+
+Tests run over an embedded NATS server and send the `Garm-Invocation` header
+the way garmd does; no test talks to the internet. Releases are per-package
+tags, for example `web/v0.1.0`. A package's README states what changed and
+what its annotations mean.
 
 ## How this differs from examples
 

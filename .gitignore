@@ -22,3 +22,7 @@ coverage.*
 
 # Catalogue artifacts are built, not committed.
 *.binpb
+
+# The assembled proto tree and the catalogue built from it (mise run assemble,
+# catalogue-web). Built, never committed: the digest identifies a build.
+build/

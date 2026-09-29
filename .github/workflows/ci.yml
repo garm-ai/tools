@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: jdx/mise-action@v2
+        with: { install: true, cache: true }
+      # Everything: the vendored annotations against garm v0.14.2, buf lint,
+      # go vet and gofmt, build, every module's tests including the
+      # end-to-end one over an embedded NATS, tidiness of each go.mod on its
+      # own, the garm lint / catalogue / mount check over the assembled proto
+      # tree, generated code freshness, and the acceptance loop.
+      - run: mise run ci
+
+  # This repository's promise is that a consumer depends on one package by
+  # tag and nothing else. The acceptance task builds and tests each module
+  # with GOWORK=off, refuses a replace directive, and refuses a path to
+  # garmd. It runs inside `mise run ci`; it is named here so a red run says
+  # which promise broke.
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: jdx/mise-action@v2
+        with: { install: true, cache: true }
+      - run: mise run acceptance
