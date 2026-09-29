@@ -11,7 +11,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/garm-ai/garm/contracts/callctx"
+	"github.com/garm-ai/contracts/callctx"
 	"github.com/garm-ai/tool-go/garmtool"
 	"github.com/garm-ai/tools/sanitize"
 	"github.com/garm-ai/tools/web"

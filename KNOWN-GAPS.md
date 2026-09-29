@@ -2,7 +2,7 @@
 
 ## Built
 
-Phase 1 is tagged: `taxonomy/v0.2.0`, `sanitize/v0.1.1`, `web/v0.1.2`.
+Phase 1 is tagged: `taxonomy/v0.2.0`, `sanitize/v0.1.1`, `web/v0.2.0`.
 
 - `taxonomy` - `internet`, `generated-artefacts`; `research`, `documents`, as a
   proto file a consumer copies and a Go module with the same four strings as
@@ -18,7 +18,12 @@ Phase 1 is tagged: `taxonomy/v0.2.0`, `sanitize/v0.1.1`, `web/v0.1.2`.
   sees; the wrapped response with notices; one attributed log line; `webd`;
   tests for every refusal class and an end-to-end test over an embedded NATS
   server with `Garm-Invocation`. Lints, builds a catalogue, mounts on a bare
-  deployment (`mise run check-web`), which now means garmd v0.3.0 or later.
+  deployment (`mise run check-web`), which since `web/v0.2.0` means garmd
+  v0.3.0 or later. On tool-go v0.6.0 the handler runs synchronously and
+  `--concurrency` (default 8) is that many micro service instances rather
+  than goroutines; `webd` passes its logger to the runtime, so the
+  concurrency actually in force is a line in the service's own log at
+  startup whether it was passed or defaulted.
 
 ## Around the contract dependency
 
@@ -40,12 +45,17 @@ Phase 1 is tagged: `taxonomy/v0.2.0`, `sanitize/v0.1.1`, `web/v0.1.2`.
   the two modules require different ones — which closes it for this
   repository and for nobody else. A consumer who copies these protos gets no
   such check.
-- **Nothing here asserts a garmd floor.** `web`'s catalogue needs
+- **Nothing here asserts a garmd floor.** `web/v0.2.0`'s catalogue needs
   garmd v0.3.0 or later, because the v0.18.1 generator synthesises two card
   endpoints per tool and an older daemon refuses them. `mise run check-web`
   runs against the pinned garmd only, so it proves the floor is met, not
   where the floor is. The annotation schema version is still `v1`, so the
   catalogue's own compatibility window does not express this.
+- **The card endpoints are registered but have no result store.** The
+  generated `DefaultResultCard` answers `result_unavailable`, because a card
+  about an answer needs the answer and nothing here keeps a record of what
+  `fetch_page` returned to somebody else. Overriding `ResultCard` and
+  reading your own row is the documented route; `webd` does not.
 
 ## Not built, and why
 

@@ -4,10 +4,10 @@ go 1.26.0
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260825204119-511051f7f437.2
-	github.com/garm-ai/garm v0.14.2
-	github.com/garm-ai/tool-go v0.5.0
+	github.com/garm-ai/contracts v0.2.0
+	github.com/garm-ai/tool-go v0.6.0
 	github.com/garm-ai/tools/sanitize v0.1.1
-	github.com/garm-ai/tools/taxonomy v0.1.1
+	github.com/garm-ai/tools/taxonomy v0.2.0
 	github.com/nats-io/nats-server/v2 v2.15.0
 	github.com/nats-io/nats.go v1.54.0
 	golang.org/x/net v0.59.0

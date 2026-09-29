@@ -12,7 +12,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/garm-ai/garm/contracts/callctx"
+	"github.com/garm-ai/contracts/callctx"
 	"github.com/garm-ai/tool-go/toolbind"
 	"github.com/garm-ai/tools/sanitize"
 	webv1 "github.com/garm-ai/tools/web/gen/web/v1"

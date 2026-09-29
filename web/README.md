@@ -4,7 +4,7 @@
 wrapped as untrusted.** The first tool of the Hermes port, and the model for
 every untrusted-content tool that follows it.
 
-Status: tagged `web/v0.1.1`. The contract lints, builds a catalogue and
+Status: tagged `web/v0.2.0`. The contract lints, builds a catalogue and
 mounts on a bare deployment; the policy file, the SSRF floor, the guarded
 dialer, extraction, the fetcher and the handler are built and tested against
 a local https server behind a fake resolver; `webd` serves `fetch_page` over
@@ -12,14 +12,30 @@ NATS, and an end-to-end test drives it over an embedded NATS server with the
 `Garm-Invocation` header garmd sends. What is deliberately not built is in
 `../KNOWN-GAPS.md`.
 
-What changed in `v0.1.1`, from the whole-branch review of `v0.1.0`:
-`final_url` is origin and path only, cleaned and capped, never the query a
-redirect chose; a redirect to a host that is not a DNS name is refused
-without echoing it; `noembed` and `noframes` text is dropped; a negative
-margin of a thousand pixels or more hides; the repository README's copy
-step works from the read-only module cache and CI runs it (`adopt-check`).
-The proto's fields and annotations are unchanged; the comment on
-`final_url` says what it now carries.
+**What changed in `v0.2.0`: the dependency, and with it the concurrency
+model.** The minor bump is the dependency changing identity, not the tool
+changing shape — no field, annotation, refusal code or policy behaviour of
+`fetch_page` moved.
+
+- The contract is `github.com/garm-ai/contracts` v0.2.0, not
+  `github.com/garm-ai/garm` v0.14.2. The `contracts/` segment is gone from
+  every import because that directory became the new module's root. The two
+  cannot be linked together: they register the same descriptor file paths, so
+  a binary holding both dies in `protoregistry` at init on
+  `file "garm/tool/v1/attribution.proto" is already registered`. It compiles
+  and then does not start, which is why this landed as one commit.
+- tool-go is v0.6.0. **A handler is invoked synchronously, and
+  `WithConcurrency(n)` is n micro service instances rather than a goroutine
+  per request.** See "Running it".
+- `webd` passes its logger to the runtime, so the configuration actually in
+  force — concurrency included, whether it was passed or defaulted — is one
+  line in the service's own log at startup.
+- The generator synthesises two card endpoints beside the tool, so this
+  service now registers three. **A deployment needs garmd v0.3.0 or later**;
+  v0.2.x refuses the catalogue.
+
+`v0.1.2` was the last release before the move: an IPv6 zone can no longer
+carry page text into a refusal, and a cut `final_url` sets `truncated`.
 
 ```
 proto/web/v1/web.proto     the declaration: what the tool is, who may see it, what it returns
@@ -46,7 +62,21 @@ guidance: { when_to_use, when_not_to_use, on_error }   prompt surface, reviewed 
 No `approval`: nothing to undo, so nothing for a human to agree to. Lint rule
 L16 does not fire because the tool is reversible. `garmd check` mounts it on a
 deployment with no grant verifier and no audit sink, and `mise run check-web`
-asserts that it does.
+asserts that it does — **against garmd v0.3.0 or later**. The catalogue now
+carries the two card endpoints the generator synthesises beside every tool,
+and a daemon that predates `garm.card.v1` reads one of those as an undeclared
+tool and refuses the whole mount (`garm.card.v1.Card: field "kind" has no
+policy and no message default`). The annotation schema version is still `v1`,
+so the catalogue's own compatibility check does not catch this; the daemon
+floor is a fact about the release, recorded here and in `../KNOWN-GAPS.md`.
+
+The annotations themselves are unchanged from `v0.1.2`. The contract gained
+an `Audience` enum and a `FieldPolicy.Source` in this window, and neither
+touches this tool: an empty `audience` means `[AUDIENCE_AGENT]`, which is the
+audience `fetch_page` already had, and `SOURCE_RUNNER` describes a field the
+dispatching runner fills, which `fetch_page` does not have. `errors.proto` is
+byte-identical but for its `go_package` line, so **no refusal of this tool is
+coded differently than it was**.
 
 **Field policies.** The request is `PUBLIC` with `mask` on deny (requests are
 checked for write clearance and never redacted on the way in; `mask` rather
@@ -156,7 +186,7 @@ verified against the system roots. The `User-Agent` is the policy's
 
 ## Adopting it
 
-`go get github.com/garm-ai/tools/web@v0.1.1` (the git tag is `web/v0.1.1`),
+`go get github.com/garm-ai/tools/web@v0.2.0` (the git tag is `web/v0.2.0`),
 then copy `proto/` and the taxonomy's `proto/` into your tree (the
 repository README has the commands: create the directory first and
 `chmod -R u+w` after, because the module cache is read-only and `cp -R`
@@ -191,19 +221,46 @@ mise run lint-web         # garm lint over the assembled tree
 mise run catalogue-web    # build/web.binpb
 mise run check-web        # garmd check: mounts on a bare deployment
 go run ./web/cmd/webd --policy web/policy.example.yaml   # from the repository root; against a local NATS
-go install github.com/garm-ai/tools/web/cmd/webd@v0.1.1   # the deployment form: the binary advertises v0.1.1
+go install github.com/garm-ai/tools/web/cmd/webd@v0.2.0   # the deployment form: the binary advertises v0.2.0
 ```
 
 `webd` connects, loads the policy (and stops if it cannot), registers
-`fetch_page`, serves until SIGTERM, then drains. `--nats` (default
-`nats://127.0.0.1:4222`) names the broker; `--concurrency` (default 8)
-bounds fetches in flight; the invocation's deadline, when garmd sends one,
-bounds each call on top of the policy `timeout`; a `--concurrency` of zero
-or less is refused at boot. The version it advertises is the module version
-the toolchain stamped: `v0.1.1` when installed from the tag with `go install
-…/cmd/webd@v0.1.1`, and `0.0.0-dev` from any in-tree `go build` or `go run`
+`fetch_page` and its two card endpoints, serves until SIGTERM, then drains.
+`--nats` (default `nats://127.0.0.1:4222`) names the broker; the
+invocation's deadline, when garmd sends one, bounds each call on top of the
+policy `timeout`. The version it advertises is the module version the
+toolchain stamped: `v0.2.0` when installed from the tag with `go install
+…/cmd/webd@v0.2.0`, and `0.0.0-dev` from any in-tree `go build` or `go run`
 — Go stamps only a root module's tag, and `web` is a nested module, so a
 build of the tagged checkout still reads `(devel)`.
+
+**`--concurrency` (default 8) is service instances, not goroutines.** Since
+tool-go v0.6.0 a handler runs synchronously in the goroutine its
+subscription owns — anything else races `micro`'s own latency accounting —
+and `nats.go` gives one delivery goroutine per subscription. So concurrency
+is subscriptions: `n` is `n` whole micro service instances in this process,
+in one queue group, and eight fetches run at once because eight instances
+do. A `--concurrency` of zero or less is refused at boot.
+
+The number is not free, and what it costs is not memory. Every instance is a
+separate responder on `$SRV.INFO`, `$SRV.PING` and `$SRV.STATS`, and garmd's
+discovery collects INFO replies into a channel buffered at 64 that drops
+silently once full — a budget shared with every other service in the plane.
+tool-go's own default is 4 for that reason. Eight is a deliberate step above
+it rather than a survival of the old flag: a fetch spends its whole life
+waiting on a host somebody else runs, so four in-flight page loads is a
+queue with an idle CPU behind it, and four extra responders against a
+ceiling of 64 fits with room left over (the reference plane's ten or eleven
+services at the default sit near forty). Beyond that, throughput is a
+deployment question — run more `webd` processes behind the same queue group,
+which needs no flag — and raising it into the tens is a garmd change first.
+
+At startup the service logs what is actually in force, defaults included:
+
+```
+level=INFO msg="serving tools" service=web version=0.2.0 tools=3 concurrency=8
+  queue_groups=[web.v1.WebService] identity=11b2175e… contract_version=v0.2.0
+```
 
 ## What one call looks like
 

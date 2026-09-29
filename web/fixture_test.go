@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/garm-ai/garm/contracts/callctx"
-	toolv1 "github.com/garm-ai/garm/contracts/garm/tool/v1"
+	"github.com/garm-ai/contracts/callctx"
+	toolv1 "github.com/garm-ai/contracts/garm/tool/v1"
 	"github.com/garm-ai/tool-go/toolbind"
 	"github.com/garm-ai/tools/web"
 	webv1 "github.com/garm-ai/tools/web/gen/web/v1"

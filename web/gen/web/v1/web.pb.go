@@ -16,7 +16,7 @@ package webv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
-	_ "github.com/garm-ai/garm/contracts/garm/tool/v1"
+	_ "github.com/garm-ai/contracts/garm/tool/v1"
 	_ "github.com/garm-ai/tools/taxonomy/gen/tools/taxonomy/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"

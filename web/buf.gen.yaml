@@ -16,4 +16,4 @@ plugins:
   # no agent, so nothing is lost.
   - local: protoc-gen-garm-go
     out: gen
-    opt: paths=source_relative,emit=toolsdk,contract_version=v0.1.1
+    opt: paths=source_relative,emit=toolsdk,contract_version=v0.2.0
