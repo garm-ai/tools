@@ -99,8 +99,17 @@ func fakeInternet() http.Handler {
 	mux.HandleFunc("/r/to-unparseable", rawLocation("https://example.com/%zz"))
 	mux.HandleFunc("/r/to-ftp", rawLocation("ftp://example.com/"))
 	mux.HandleFunc("/r/to-long", rawLocation("https://"+strings.Repeat("a", 300)+".example.com/"))
+	// An allowed host that cannot be reached, with the client's own words for
+	// an unparseable Location in the query, where url.Error repeats them.
+	mux.HandleFunc("/r/to-down", rawLocation("https://down.example.com/?failed to parse Location header"))
+	// A host of 253 runes with a port: the longest name DNS carries, and
+	// the port must not count against it.
+	mux.HandleFunc("/r/to-longest", rawLocation("https://"+longestHost+":8443/"))
 	return mux
 }
+
+// longestHost is exactly 253 runes: the DNS maximum, under *.example.com.
+var longestHost = strings.Repeat("a", 253-len(".example.com")) + ".example.com"
 
 type harness struct {
 	site *site
@@ -259,18 +268,18 @@ func TestAHostThatDoesNotResolveFetchesNothing(t *testing.T) {
 func TestARedirectToABlockedHostIsRefusedHopByHop(t *testing.T) {
 	h := newHarness(t, testPolicyYAML)
 	_, err := call(invocation(), h.svc, "https://example.com/r/to-blocked", 0)
-	expect(t, err, "403", "redirect to https://blocked.example.com refused")
+	expect(t, err, "403", `redirect to "https://blocked.example.com" refused`)
 	if _, m := code(t, err); !strings.Contains(m, `block rule "blocked.example.com"`) {
 		t.Errorf("the rule that matched is not named: %q", m)
 	}
 	_, err = call(invocation(), h.svc, "https://example.com/r/to-other", 0)
-	expect(t, err, "403", "redirect to https://other.org refused: host \"other.org\" is not on the allowlist")
+	expect(t, err, "403", `redirect to "https://other.org" refused: host "other.org" is not on the allowlist`)
 }
 
 func TestARedirectToHTTPIsRefused(t *testing.T) {
 	h := newHarness(t, testPolicyYAML)
 	_, err := call(invocation(), h.svc, "https://example.com/r/to-http", 0)
-	expect(t, err, "403", `redirect to http://example.com refused: scheme "http" is not https`)
+	expect(t, err, "403", `redirect to "http://example.com" refused: scheme "http" is not https`)
 }
 
 func TestARedirectToAPrivateHostIsRefusedAtTheDial(t *testing.T) {
@@ -471,6 +480,29 @@ func TestEveryRedirectRefusalIs403AndEchoesNoLocation(t *testing.T) {
 	}
 	if d := h.site.dials(); len(d) != 1 {
 		t.Errorf("dialled %v; only the first hop may connect", d)
+	}
+}
+
+func TestAHopThatFailsAtTheDialIsNotAParseRefusal(t *testing.T) {
+	h := newHarness(t, testPolicyYAML)
+	_, err := call(invocation(), h.svc, "https://example.com/r/to-down", 0)
+	expect(t, err, "502", "the connection failed")
+	if _, m := code(t, err); strings.Contains(m, "Location") || strings.Contains(m, "down.example.com") {
+		t.Errorf("the hop's query or host reached the refusal: %q", m)
+	}
+	if d := h.site.dials(); len(d) != 2 {
+		t.Errorf("dialled %v; the hop was vetted and should have been dialled", d)
+	}
+}
+
+func TestTheHostLengthCapCountsTheNameAndNotThePort(t *testing.T) {
+	h := newHarness(t, testPolicyYAML)
+	_, err := call(invocation(), h.svc, "https://example.com/r/to-longest", 0)
+	// The name is the longest DNS allows, so it is a host; it is not in the
+	// fixture's resolver, so the hop fails there, past the length check.
+	expect(t, err, "502", "did not resolve")
+	if _, m := code(t, err); strings.Contains(m, "not a valid name") {
+		t.Errorf("a 253-rune host with a port was refused as too long: %q", m)
 	}
 }
 

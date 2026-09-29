@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -135,8 +136,9 @@ const maxOriginRunes = 256
 
 // checkHop is checkURL for a redirect target: the same checks, but the
 // target is the page's choice, so every refusal is 403 and the message
-// repeats at most the target's origin, capped, and only when its scheme is
-// one a reader would recognise.
+// repeats at most the target's origin, capped and quoted (the form
+// CheckHost gives a host), and only when its scheme is one a reader would
+// recognise.
 func (f *Fetcher) checkHop(u *url.URL) error {
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return refusal("403", "redirect refused: the target is not an https URL")
@@ -144,7 +146,7 @@ func (f *Fetcher) checkHop(u *url.URL) error {
 	if u.Hostname() == "" {
 		return refusal("403", "redirect refused: the target has no host")
 	}
-	if utf8.RuneCountInString(u.Host) > maxHostRunes {
+	if utf8.RuneCountInString(u.Hostname()) > maxHostRunes {
 		return refusal("403", "redirect refused: the target host is not a valid name")
 	}
 	err := f.checkURL(u)
@@ -158,7 +160,7 @@ func (f *Fetcher) checkHop(u *url.URL) error {
 	if errors.As(err, &coded) {
 		msg = coded.Message
 	}
-	return refusal("403", "redirect to "+capRunes(origin(u), maxOriginRunes)+" "+msg)
+	return refusal("403", "redirect to "+strconv.Quote(capRunes(origin(u), maxOriginRunes))+" "+msg)
 }
 
 // knownTypes are media types a refusal may repeat verbatim: well known,
@@ -222,8 +224,11 @@ func (f *Fetcher) fetch(ctx context.Context, u *url.URL) (*page, error) {
 		// A Location the client could not parse fails before the redirect
 		// hook runs, as a plain error whose text quotes the header. It is
 		// a redirect refusal like any other, and the header is not
-		// repeated.
-		if strings.Contains(err.Error(), "failed to parse Location header") {
+		// repeated. The url.Error around it repeats the request URL, query
+		// included, so the match is on the error inside and not on the
+		// whole text, where a hop's query could put the same words.
+		var ue *url.Error
+		if errors.As(err, &ue) && strings.HasPrefix(ue.Err.Error(), "failed to parse Location header") {
 			return nil, refusal("403", "redirect refused: the target could not be parsed")
 		}
 		return nil, refusal("502", "upstream: the connection failed")
