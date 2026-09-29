@@ -170,16 +170,20 @@ mise run gen-web          # messages and the binding
 mise run lint-web         # garm lint over the assembled tree
 mise run catalogue-web    # build/web.binpb
 mise run check-web        # garmd check: mounts on a bare deployment
-go run ./web/cmd/webd --policy web/policy.example.yaml   # against a local NATS
+go run ./web/cmd/webd --policy web/policy.example.yaml   # from the repository root; against a local NATS
+go install github.com/garm-ai/tools/web/cmd/webd@v0.1.0   # the deployment form: the binary advertises v0.1.0
 ```
 
 `webd` connects, loads the policy (and stops if it cannot), registers
 `fetch_page`, serves until SIGTERM, then drains. `--nats` (default
 `nats://127.0.0.1:4222`) names the broker; `--concurrency` (default 8)
 bounds fetches in flight; the invocation's deadline, when garmd sends one,
-bounds each call on top of the policy `timeout`. The version it advertises
-is the module version the toolchain stamped (`v0.1.0` from a build of the
-tag), or `0.0.0-dev` from an untagged tree.
+bounds each call on top of the policy `timeout`; a `--concurrency` of zero
+or less is refused at boot. The version it advertises is the module version
+the toolchain stamped: `v0.1.0` when installed from the tag with `go install
+…/cmd/webd@v0.1.0`, and `0.0.0-dev` from any in-tree `go build` or `go run`
+— Go stamps only a root module's tag, and `web` is a nested module, so a
+build of the tagged checkout still reads `(devel)`.
 
 ## What one call looks like
 

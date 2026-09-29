@@ -30,20 +30,22 @@ import (
 )
 
 func main() {
-	if err := run(); err != nil {
-		slog.Error("webd stopped", "err", err)
+	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	if err := run(log); err != nil {
+		log.Error("webd stopped", "err", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func run(log *slog.Logger) error {
 	url := flag.String("nats", nats.DefaultURL, "NATS server URL")
 	policyPath := flag.String("policy", "", "Path to the allow/block policy (required)")
 	concurrency := flag.Int("concurrency", 8, "Fetches in flight at once")
 	flag.Parse()
 
-	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
-
+	if *concurrency <= 0 {
+		return errors.New("--concurrency must be at least 1")
+	}
 	if *policyPath == "" {
 		return errors.New("--policy is required: this service fetches nothing without an allowlist")
 	}
@@ -90,10 +92,11 @@ func run() error {
 }
 
 // version is the module version the toolchain stamped, which the daemon
-// reads back from $SRV.INFO: the tag when built from a tagged, clean
-// checkout, a pseudo-version otherwise. An untagged tree is stamped
-// "(devel)" since Go 1.24, which is not a version NATS micro accepts, so it
-// is reported as a dev build the way an unstamped binary is.
+// reads back from $SRV.INFO: v0.1.0 when installed with
+// `go install …/cmd/webd@v0.1.0`. Any in-tree build — tagged checkout or
+// not — is stamped "(devel)", because Go stamps only a root module's tag and
+// web is a nested module; "(devel)" is not a version NATS micro accepts, so
+// it is reported as a dev build.
 func version() string {
 	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
 		return info.Main.Version

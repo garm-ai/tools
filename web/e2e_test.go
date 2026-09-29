@@ -116,6 +116,17 @@ func TestFetchPageAnswersOnItsContractSubject(t *testing.T) {
 	if resp.GetTitle() != "Example Domain" {
 		t.Errorf("title = %q", resp.GetTitle())
 	}
+	// The three fields a caller keys on, over the wire: the origin only,
+	// a digest of the content as returned, and the policy that allowed it.
+	if resp.GetFinalUrl() != "https://example.com/" {
+		t.Errorf("final_url = %q, want the origin", resp.GetFinalUrl())
+	}
+	if len(resp.GetContentSha256()) != 64 {
+		t.Errorf("content_sha256 = %q", resp.GetContentSha256())
+	}
+	if resp.GetPolicyDigest() != testPolicy(t, testPolicyYAML).Digest() {
+		t.Errorf("policy_digest = %q", resp.GetPolicyDigest())
+	}
 }
 
 func TestARefusalTravelsAsACodedError(t *testing.T) {
