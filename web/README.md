@@ -4,9 +4,10 @@
 wrapped as untrusted.** The first tool of the Hermes port, and the model for
 every untrusted-content tool that follows it.
 
-Status: the contract is declared, lints, builds a catalogue and mounts, and
-the policy file loads; the fetcher and `webd` are not built yet and the
-module is not tagged. `web/v0.1.0` arrives with `webd`.
+Status: the contract is declared, lints, builds a catalogue and mounts; the
+policy file loads and the SSRF floor and guarded dialer are in place; the
+fetcher and `webd` are not built yet and the module is not tagged.
+`web/v0.1.0` arrives with `webd`.
 
 ```
 proto/web/v1/web.proto     the declaration: what the tool is, who may see it, what it returns
