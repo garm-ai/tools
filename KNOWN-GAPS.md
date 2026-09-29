@@ -26,15 +26,28 @@ item from the list below to this one.
   itself, refuses unless every address is public, and dials the vetted
   literal; extraction reduces HTML to the text a reader sees (`script`,
   `style`, `template`, `noscript`, `iframe`, `object`, `svg`, comments and
-  hidden subtrees dropped, the title kept apart). The rest of the service —
-  redirect re-check, the wrapped response, `webd` — arrives in the next
-  tasks.
+  hidden subtrees dropped, the title kept apart); the fetcher re-checks
+  every redirect hop and the resolved address, caps the body and the text,
+  gates the content type, and the handler returns the wrapped response and
+  writes the one log line. `webd`, the process that registers it on NATS,
+  arrives in the next task; until then the module is not tagged.
 - `web`: extraction judges "hidden" from the markup alone: the `hidden`
   attribute, `aria-hidden`, and inline `style`. Text hidden by an external
   stylesheet, a class (`sr-only`, `visually-hidden`), a `clip`/`clip-path`
   rule, or a zero-height overflow box is not dropped and reaches the
   sanitiser like any other text. Rendering CSS is out of scope for a text
   tool; the sanitiser's injection-phrase notice is the backstop.
+- `web`: a hidden element whose end tag is omitted drops the rest of the
+  document. HTML lets `p`, `li`, `td`, `tr`, `dt`, `dd` and `option` close
+  implicitly when the next sibling opens; extraction counts explicit end
+  tags only, so `<p hidden>x<p>visible` never sees the first `p` close and
+  treats everything after it as hidden. A self-closing `<svg/>` or `<math/>`
+  does the same: a browser opens a foreign element there, and so does
+  extraction, and nothing closes it. Both err in the safe direction (text a
+  model should not have read is dropped, never the reverse) and the
+  `truncated` flag is not raised, so a caller sees a shorter page, not a
+  marked one. Fixing it means a parser that knows the implicit-close rules,
+  which is a DOM; recorded rather than built.
 - `web`: the guarded dialer connects to the first vetted address only. A host
   whose first address is unreachable is not retried on its second; the fetch
   fails and the caller retries.

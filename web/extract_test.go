@@ -138,3 +138,59 @@ func TestPlainTextMediaTypeMayCarryParameters(t *testing.T) {
 		t.Errorf("text/html: Text = %q, want %q", ex.Text, "x")
 	}
 }
+
+func TestOffscreenRightAndBottomAreHidden(t *testing.T) {
+	ex := extractHTML([]byte(`<p style="position:absolute; right:-9999px">right-away</p><p style="bottom: -1000px">bottom-away</p><p style="right:-5px">nudged</p>`))
+	text := sanitize.Clean(ex.Text, 0).Text
+	for _, gone := range []string{"right-away", "bottom-away"} {
+		if strings.Contains(text, gone) {
+			t.Errorf("%q is off the page and leaked: %q", gone, text)
+		}
+	}
+	if !strings.Contains(text, "nudged") {
+		t.Errorf("a small nudge is not off the page: %q", text)
+	}
+}
+
+func TestOpacityWithoutALeadingZeroIsHidden(t *testing.T) {
+	ex := extractHTML([]byte(`<p style="opacity:.0">gone</p><p style="opacity: .00;">also-gone</p><p style="opacity:.5">faint</p><p style="opacity:">unset</p>`))
+	text := sanitize.Clean(ex.Text, 0).Text
+	for _, gone := range []string{"gone", "also-gone"} {
+		if strings.Contains(text, gone) {
+			t.Errorf("%q should not be readable text: %q", gone, text)
+		}
+	}
+	for _, want := range []string{"faint", "unset"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("%q is visible, missing from %q", want, text)
+		}
+	}
+}
+
+func TestTransparentColourIsHidden(t *testing.T) {
+	ex := extractHTML([]byte(`<p style="color:transparent">invisible-ink</p><p style="COLOR : Transparent">shouted</p><p style="background-color:transparent">on-glass</p>`))
+	text := sanitize.Clean(ex.Text, 0).Text
+	for _, gone := range []string{"invisible-ink", "shouted"} {
+		if strings.Contains(text, gone) {
+			t.Errorf("%q is transparent text and leaked: %q", gone, text)
+		}
+	}
+	if !strings.Contains(text, "on-glass") {
+		t.Errorf("a transparent background hides nothing: %q", text)
+	}
+}
+
+func TestHiddenPropertyNamesAreAnchored(t *testing.T) {
+	ex := extractHTML([]byte(`<p style="margin-left:-100px">pulled</p><p style="padding-top:-1000px">padded</p><p style="color:red;left:-1000px">gone</p><p style="top:-1000px">also-gone</p>`))
+	text := sanitize.Clean(ex.Text, 0).Text
+	for _, want := range []string{"pulled", "padded"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("%q: a margin or padding is not a position, missing from %q", want, text)
+		}
+	}
+	for _, gone := range []string{"gone", "also-gone"} {
+		if strings.Contains(text, gone) {
+			t.Errorf("%q should not be readable text: %q", gone, text)
+		}
+	}
+}

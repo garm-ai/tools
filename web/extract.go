@@ -40,11 +40,15 @@ var voidTags = map[string]bool{
 }
 
 // hiddenStyle is the inline CSS a reader never sees: not rendered, not
-// visible, zero-sized, or positioned off the page. Text hidden this way is
-// the classic carrier for instructions aimed at a model rather than a
-// person. A zero is a zero, not the start of 0.5: opacity:0.5 and
-// font-size:0.9em are small print, which a reader sees.
-var hiddenStyle = regexp.MustCompile(`(?i)(display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0(\.0+)?([^.\d]|$)|font-size\s*:\s*0(\.0+)?(px|pt|em|rem|%)?([^.\d]|$)|(left|top|text-indent)\s*:\s*-\d{3,})`)
+// visible, zero-sized, transparent, or positioned off the page. Text hidden
+// this way is the classic carrier for instructions aimed at a model rather
+// than a person. A zero is a zero, not the start of 0.5: opacity:0.5 and
+// font-size:0.9em are small print, which a reader sees; opacity:.0 is a
+// zero written without its leading digit. Every property name is anchored
+// to the start of the style or to the separator before it, so that
+// margin-left:-100px is a margin and background-color:transparent is a
+// background, neither of which hides anything.
+var hiddenStyle = regexp.MustCompile(`(?i)(^|[;\s])(display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*(0(\.0+)?|\.0+)([^.\d]|$)|font-size\s*:\s*0(\.0+)?(px|pt|em|rem|%)?([^.\d]|$)|color\s*:\s*transparent|(left|top|right|bottom|text-indent)\s*:\s*-\d{3,})`)
 
 func hidden(attrs []html.Attribute) bool {
 	for _, a := range attrs {
