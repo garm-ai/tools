@@ -34,7 +34,7 @@ One directory, one Go module, one release train. A package holds:
 - a README that explains every annotation choice in plain words.
 
 One repository, **per-package adoption**. Each package is its own Go module,
-tagged `<package>/vX.Y.Z`. You depend on `github.com/garm-ai/tools/web@web/v0.1.0`,
+tagged `<package>/vX.Y.Z`. You depend on `github.com/garm-ai/tools/web@v0.1.0` (the git tag is `web/v0.1.0`),
 not on this repository, and you inherit only what that package needs: `web`
 brings `taxonomy` (the vocabulary its tool names) and `sanitize` (the wrapper
 its response uses), both tagged packages of this repository, and nothing
@@ -123,7 +123,7 @@ first.
 Two steps, because garm builds a catalogue from one proto tree and has no
 proto-dependency mechanism beyond buf:
 
-1. `go get github.com/garm-ai/tools/web@web/v0.1.0` — the generated messages
+1. `go get github.com/garm-ai/tools/web@v0.1.0` — the generated messages
    and the `ServeWebService` binding your `main` registers on a `garmtool`
    service.
 2. Copy the package's proto tree, and the taxonomy's, into your own:

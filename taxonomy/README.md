@@ -30,8 +30,9 @@ If your tree already declares one of these names with a different
 description, `garm catalogue build` fails naming both sources (L29). Adopt one
 definition or rename yours.
 
-The Go module (`go get github.com/garm-ai/tools/taxonomy@taxonomy/v0.1.0`)
-gives you the same four strings as constants (`taxonomy.CompartmentInternet`
+The Go module — `go get github.com/garm-ai/tools/taxonomy@v0.1.1`; the git tag
+is `taxonomy/v0.1.1`, and Go names a nested module's version without the
+prefix — gives you the same four strings as constants (`taxonomy.CompartmentInternet`
 and friends) so a claims file or a test never misspells one, and links the
 file descriptor so the declarations can be read off it.
 
