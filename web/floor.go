@@ -31,6 +31,8 @@ var nonPublicPrefixes = func() []netip.Prefix {
 		"2001::/32",          // Teredo: embeds an IPv4 address
 		"2001:db8::/32",      // documentation
 		"2002::/16",          // 6to4: embeds an IPv4 address
+		"fec0::/10",          // site-local (deprecated, still routed as unicast)
+		"::/96",              // IPv4-compatible (deprecated): embeds an IPv4 address
 	} {
 		out = append(out, netip.MustParsePrefix(s))
 	}
@@ -81,10 +83,48 @@ func checkHostFloor(host string) error {
 		}
 		return refusal("403", fmt.Sprintf("refused: %q is an IP address; the allowlist names hosts", host))
 	}
+	// A disguised IPv4 literal — 2130706433, 0x7f000001, 0177.0.0.1, 127.1 —
+	// is not an address to netip but is one to the platform resolver, which
+	// parses leniently. The WHATWG rule: a host whose last label is all
+	// digits or hex-prefixed is a number, and a number is not a name.
+	if endsInANumber(host) {
+		return refusal("403", fmt.Sprintf("refused: %q is an IP address; the allowlist names hosts", host))
+	}
 	for _, n := range localNames {
 		if host == n || (strings.HasPrefix(n, ".") && strings.HasSuffix(host, n)) || host == strings.TrimPrefix(n, ".") {
 			return refusal("403", fmt.Sprintf("refused: %q is a local or metadata name", host))
 		}
 	}
 	return nil
+}
+
+// endsInANumber is the WHATWG URL "ends in a number" check: the last
+// non-empty label is decimal digits, or 0x followed by hex digits.
+func endsInANumber(host string) bool {
+	labels := strings.Split(host, ".")
+	last := labels[len(labels)-1]
+	if last == "" && len(labels) > 1 {
+		last = labels[len(labels)-2]
+	}
+	if last == "" {
+		return false
+	}
+	if strings.HasPrefix(last, "0x") {
+		last = last[2:]
+		if last == "" {
+			return true
+		}
+		for _, r := range last {
+			if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')) {
+				return false
+			}
+		}
+		return true
+	}
+	for _, r := range last {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }

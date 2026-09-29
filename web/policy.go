@@ -97,6 +97,12 @@ func ParsePolicy(r io.Reader) (*Policy, error) {
 		}
 		return nil, err
 	}
+	// One document. A second one would load silently as nothing, and the
+	// operator who wrote it would believe its rules apply.
+	var extra any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return nil, errors.New("the policy file has more than one YAML document; one is expected")
+	}
 	if len(p.Allow) == 0 {
 		return nil, errors.New("the policy allows no hosts; an allowlist is required, because this service fails closed")
 	}
@@ -104,6 +110,12 @@ func ParsePolicy(r io.Reader) (*Policy, error) {
 		p.Allow[i] = strings.ToLower(strings.TrimSpace(rule))
 		if !hostRule.MatchString(p.Allow[i]) {
 			return nil, fmt.Errorf("allow[%d] %q is not a host or a *.host pattern", i, rule)
+		}
+		// An allow entry the floor would refuse anyway (an IP literal, a
+		// local or metadata name) can never match a fetch; loading it
+		// would let an operator believe it does.
+		if err := checkHostFloor(strings.TrimPrefix(p.Allow[i], "*.")); err != nil {
+			return nil, fmt.Errorf("allow[%d] %q can never match: %v", i, rule, err)
 		}
 	}
 	for i, rule := range p.Block {

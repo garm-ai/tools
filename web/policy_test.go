@@ -170,3 +170,19 @@ func TestDigestIsOverTheListsAndOrderIndependent(t *testing.T) {
 		t.Errorf("digest %q is not lowercase hex sha256", a.Digest())
 	}
 }
+
+func TestAnAllowEntryTheFloorRefusesIsALoadError(t *testing.T) {
+	for _, entry := range []string{"10.0.0.1", "localhost", "*.internal", "169.254.169.254", "2130706433"} {
+		_, err := ParsePolicy(strings.NewReader("allow: ['" + entry + "']\n"))
+		if err == nil || !strings.Contains(err.Error(), "can never match") {
+			t.Errorf("allow %q loaded: %v", entry, err)
+		}
+	}
+}
+
+func TestASecondYAMLDocumentIsALoadError(t *testing.T) {
+	_, err := ParsePolicy(strings.NewReader("allow: [a.example]\n---\nalow: [x.example]\n"))
+	if err == nil || !strings.Contains(err.Error(), "more than one") {
+		t.Errorf("a two-document policy loaded: %v", err)
+	}
+}

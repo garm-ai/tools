@@ -21,6 +21,9 @@ func TestNonPublicAddressesAreRefused(t *testing.T) {
 		"2001::1",         // Teredo
 		"2001:db8::1",     // documentation
 		"fd00:ec2::254",   // AWS IMDS over IPv6
+		"fec0::1",         // site-local
+		"::a00:1",         // IPv4-compatible: 10.0.0.1
+		"::7f00:1",        // IPv4-compatible: loopback
 		"::ffff:169.254.169.254",
 	} {
 		if addrIsPublic(netip.MustParseAddr(s)) {
@@ -72,6 +75,24 @@ func TestOrdinaryHostsPassTheFloor(t *testing.T) {
 	for _, host := range []string{"example.com", "www.gov.uk", "bankofengland.co.uk", "Example.COM."} {
 		if err := checkHostFloor(host); err != nil {
 			t.Errorf("%s: %v", host, err)
+		}
+	}
+}
+
+func TestADisguisedIPv4LiteralIsRefusedAsAnAddress(t *testing.T) {
+	for _, h := range []string{"2130706433", "0x7f000001", "0177.0.0.1", "127.1", "0x7f.1", "8.8.8.8."} {
+		err := checkHostFloor(h)
+		if err == nil {
+			t.Errorf("checkHostFloor(%q) = nil, want a 403 naming an IP address", h)
+			continue
+		}
+		if code, msg := codeOf(t, err); code != "403" || !strings.Contains(msg, "IP address") {
+			t.Errorf("checkHostFloor(%q) = %v, want a 403 naming an IP address", h, err)
+		}
+	}
+	for _, h := range []string{"example.com", "a1.example", "0x.example", "v6.example."} {
+		if err := checkHostFloor(h); err != nil {
+			t.Errorf("checkHostFloor(%q) = %v, want nil", h, err)
 		}
 	}
 }
