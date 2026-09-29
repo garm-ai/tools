@@ -6,9 +6,11 @@ served as NATS micro services behind [garmd](https://github.com/garm-ai/garmd),
 and maintained here. You take the packages you want and nothing else.
 
 Status, 29 September 2026: phase 1 (`taxonomy`, `sanitize`, `fetch_page`) is
-tagged: `taxonomy/v0.2.0`, `sanitize/v0.1.1`, `web/v0.2.0`. `KNOWN-GAPS.md`
-says what is built and what is deliberately not; the roadmap below says what
-arrives when.
+tagged: `taxonomy/v0.2.0`, `sanitize/v0.1.1`, `web/v0.2.0`. The first tool of
+phase 2 is tagged too: `search/v0.1.0` (`search_web`). `KNOWN-GAPS.md` says
+what is built and what is deliberately not — an **S** in the port assessment
+is an estimate of effort, not a claim of completeness — and the roadmap below
+says what arrives when.
 
 ## Contents
 
@@ -54,11 +56,19 @@ buys an independence nobody asked for at the cost of N pipelines.
 |---|---|---|---|
 | `taxonomy/` | `github.com/garm-ai/tools/taxonomy` | `taxonomy/v0.2.0` | The compartments and tool sets the packages here share: `internet`, `generated-artefacts`; `research`, `documents` |
 | `sanitize/` | `github.com/garm-ai/tools/sanitize` | `sanitize/v0.1.1` | Cleaning and wrapping text an attacker may have written, before a model reads it |
+| `search/` | `github.com/garm-ai/tools/search` | `search/v0.1.0` | `search.v1.search_web`: one query in, links and excerpts out, behind the same host policy and a two-sided floor |
 | `web/` | `github.com/garm-ai/tools/web` | `web/v0.2.0` | `web.v1.fetch_page`: one public https page in, its readable text out, behind an allowlist and an SSRF floor |
 
 `payments/`, `identity/` and `compliance/` are the packages this repository
-was created for and are not yet seeded; the three above are the first
+was created for and are not yet seeded; the four above are the first
 release train because a research agent needs them first.
+
+`search` is its own module rather than a second tool inside `web`, which the
+roadmap originally assumed. A deployment that wants search and not fetching
+should not mount the fetcher's allowlist; the two are on different contract
+versions today (`web` on contracts v0.2.0, `search` on v0.3.0) and one module
+cannot be on two; and a binary linking both protos would register a tool it
+does not serve.
 
 The full set, planned and intended:
 
@@ -67,7 +77,7 @@ The full set, planned and intended:
 | `taxonomy` | The shared vocabulary: `internet` and `generated-artefacts` compartments; `research` and `documents` tool sets | none | phase 1, tagged `taxonomy/v0.2.0` |
 | `sanitize` | Normalises untrusted content before it reaches a model: control characters, injection sentinels, length caps, an untrusted marker | none | phase 1, tagged `sanitize/v0.1.1` |
 | `web` | `fetch_page`: a governed page fetcher with a host allowlist and blocklist, an SSRF floor, redirect re-checks, text extraction | prompt injection, exfiltration | phase 1, tagged `web/v0.2.0` |
-| `web` | `search_web`: a search client whose results are filtered by the same host policy | prompt injection | planned, phase 2 |
+| `search` | `search_web`: a search client whose results are filtered by the same host policy | prompt injection | phase 2, tagged `search/v0.1.0` |
 | `artefacts` | An object store for generated files with `get`, `list` and `delete`, owner-only until the authorization graph lands | data exposure | planned, phase 2 |
 | `documents` | `create_html_document`, `create_workbook` (Excel) | data exposure | planned, phase 2 |
 | `documents` | `create_presentation` (PowerPoint), `create_document` (Word), `extract_document` | data exposure, sandbox | planned, phase 3 |
@@ -96,7 +106,7 @@ release of one package.
 
 | Step | Package | Delivers | Effort | Depends on |
 |---|---|---|---|---|
-| 4 | `web` | `search_web`, results filtered by the host policy | S | 1, a search vendor decision |
+| 4 | `search` | `search_web`, results filtered by the host policy | S | 1, 2, a search vendor decision (Brave) |
 | 5 | `artefacts` | The store and its three tools; a file is an `ArtifactRef`, never bytes | M | none |
 | 6 | `documents` | `create_html_document`, the first generator, proving the output contract | S | 2, 5 |
 | 7 | `documents` | `create_workbook` on excelize | M | 5 |
@@ -142,12 +152,21 @@ proto-dependency mechanism beyond buf:
    module cache is the same bytes your build links, so the proto and the
    binding cannot disagree.)
 
+For `search` the same two steps with `github.com/garm-ai/tools/search@v0.1.0`
+in place of `web`, plus one file it does not share: a search API needs a
+credential, and `searchd` takes it as `--api-key-file` (or
+`SEARCHD_API_KEY_FILE`) — a path, never a value, so the key is not in a
+process list. `search/README.md` says why.
+
 This repository's own CI does both: `mise run assemble` copies the packages'
 trees from the working tree into `build/proto`, and `garm lint`,
-`garm catalogue build` and `garmd check` run over it (`lint-web`,
-`catalogue-web`, `check-web`); `mise run adopt-check` runs step 2 as written,
-from the module cache into a temporary directory, then `garm lint` and
-`garm catalogue build` over that, so the commands above cannot regress.
+`garm catalogue build` and `garmd check` run over it (`lint-web` over the
+whole assembled tree, `catalogue-search`/`check-search`,
+`catalogue-web`/`check-web`); `mise run adopt-check` runs step 2 as written
+for `web`, from the module cache into a temporary directory, then `garm lint`
+and `garm catalogue build` over that, so the commands above cannot regress.
+There is no `adopt-check` for `search` yet, and there cannot be one until
+`search/v0.1.0` is on the proxy; `KNOWN-GAPS.md` records it.
 
 Then, as with any tool of your own: vendor the annotations once with
 `garm init`, publish the catalogue with `garm catalogue publish`, run the
@@ -158,8 +177,11 @@ manifest allowlist the tools you want and add guards, for example
 Three version floors go with that, and all three come from the split of the
 CLI from the contract:
 
-- **garm v0.18.1 or later**, CLI and `protoc-gen-garm-go` from the same
-  release. v0.18.0 renamed the Go import paths — the annotations and wire
+- **garm v0.19.0 or later**, CLI and `protoc-gen-garm-go` from the same
+  release. v0.19.0 qualifies every generated card helper by its service
+  (`Default<Service><Card>`, `<Service><Card>From`); the bare names it emitted
+  before collide when one proto package holds two single-tool services, and a
+  tree that regenerates against it renames those identifiers. v0.18.0 renamed the Go import paths — the annotations and wire
   types are `github.com/garm-ai/contracts` now, and the `contracts/` segment
   that used to sit inside `github.com/garm-ai/garm` is gone — so a tree that
   upgrades one and not the other generates imports of packages that no longer
@@ -181,9 +203,12 @@ CLI from the contract:
 
 `garm lint` still warns `O1` that `web.v1.WebService` names no
 `(garm.meta.v1.owner)` — a warning today and an error in a later release.
-`KNOWN-GAPS.md` records it: naming an owner names the team a ledger row is
-charged to, which is the adopting organisation's answer rather than this
-repository's.
+`KNOWN-GAPS.md` records it. `search.v1.SearchService` does name one
+(`team: "garm-tools"`, `contact: "github.com/garm-ai/tools/issues"`), because
+a public package naming its maintainers is a better answer than no answer:
+`Owner.team` is the unit a ledger row is charged to, and an adopter who wants
+its own team on the row edits that line in the proto it vendors, which it has
+to copy anyway. `web` is expected to follow.
 
 ## A package brings its own taxonomy
 
@@ -237,7 +262,15 @@ read a field, not what a value may be.
   return a reference. Reading a file back is its own governed tool with its own
   policy.
 - **Egress is a deployment decision.** The fetcher's allowlist, the SSRF floor
-  and the container's network policy all say no by default.
+  and the container's network policy all say no by default. The searcher
+  applies the same host policy to the links it *returns*, so an agent is never
+  shown an address it could not fetch — and drops what fails rather than
+  refusing the call, because one poisoned row in an index's answer must not
+  become a way to deny the tool to everyone.
+- **A credential is a file.** Anything here that needs one takes a path
+  (`--api-key-file`), never a value: a flag is in every `ps` on the host and
+  an environment variable's value is inherited by every child. It is never
+  logged, never returned and never named in an error.
 - **Approval where money or messages move.** Anything that leaves the
   perimeter is approval-gated with material fields, the same way a payment is.
 
@@ -248,8 +281,8 @@ Go 1.26, `mise` for the toolchain, `buf` for protos.
 ```
 mise install          the toolchain
 mise run ci           what CI runs: vendor-check, buf-lint, lint-taxonomy, lint-web,
-                      check-web (which builds the catalogue first), adopt-check,
-                      lint, build, test, tidy-check, acceptance, gen-check
+                      check-search and check-web (each builds its catalogue first),
+                      adopt-check, lint, build, test, tidy-check, acceptance, gen-check
 mise run gen          regenerate the committed Go from the protos
 ```
 
@@ -260,8 +293,10 @@ tests each one with `GOWORK=off`, which is the README's promise made testable.
 No `replace` directive is ever committed.
 
 Tests run over an embedded NATS server and send the `Garm-Invocation` header
-the way garmd does; no test talks to the internet. Releases are per-package
-tags, for example `web/v0.2.0`. A package's README states what changed and
+the way garmd does; no test talks to the internet — the fetcher's fake
+internet and the searcher's fake index are local https servers behind a fake
+resolver, on ephemeral ports. Releases are per-package tags, for example
+`web/v0.2.0` and `search/v0.1.0`. A package's README states what changed and
 what its annotations mean.
 
 ## How this differs from examples

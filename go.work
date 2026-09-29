@@ -2,4 +2,5 @@ go 1.26.0
 
 use ./taxonomy
 use ./sanitize
+use ./search
 use ./web

@@ -2,7 +2,8 @@
 
 ## Built
 
-Phase 1 is tagged: `taxonomy/v0.2.0`, `sanitize/v0.1.1`, `web/v0.2.0`.
+Phase 1 is tagged: `taxonomy/v0.2.0`, `sanitize/v0.1.1`, `web/v0.2.0`. The
+first of phase 2 is `search/v0.1.0`.
 
 - `taxonomy` - `internet`, `generated-artefacts`; `research`, `documents`, as a
   proto file a consumer copies and a Go module with the same four strings as
@@ -24,6 +25,21 @@ Phase 1 is tagged: `taxonomy/v0.2.0`, `sanitize/v0.1.1`, `web/v0.2.0`.
   than goroutines; `webd` passes its logger to the runtime, so the
   concurrency actually in force is a line in the service's own log at
   startup whether it was passed or defaulted.
+- `search` - `search.v1.search_web`: the annotated contract, with an
+  `(garm.meta.v1.owner)`; a fail-closed YAML policy naming the backend, the
+  endpoint, the result allow and block lists, caps and a digest; the two
+  halves of the floor (egress to the configured endpoint, no redirects at
+  all, every resolved address checked; ingress over every URL the index
+  returned, dropped and counted rather than refused); a Brave client whose
+  credential comes from a file and reaches no log, URL, error or response;
+  per-result `sanitize.Wrap`; one attributed log line carrying neither the
+  query nor anything the index wrote; `searchd`. Lints, builds a catalogue,
+  mounts on a bare deployment (`mise run check-search`). `--concurrency`
+  defaults to 4 — tool-go's own default, chosen rather than inherited: a
+  search is one short JSON round trip, and the vendor's requests-per-second
+  rating is the real ceiling. An **S** in the port assessment was an estimate
+  of effort; "Not built, and why" below says what an S bought and what it did
+  not.
 
 ## Around the contract dependency
 
@@ -41,23 +57,77 @@ Phase 1 is tagged: `taxonomy/v0.2.0`, `sanitize/v0.1.1`, `web/v0.2.0`.
   `mise run vendor-check` compared `third_party/proto` against a version
   *written in `mise.toml`*, so while `go.mod` sat five releases behind, the
   check went on passing because it was comparing the tree to its own
-  constant. It now reads the version from `taxonomy/go.mod` and refuses if
-  the two modules require different ones — which closes it for this
-  repository and for nobody else. A consumer who copies these protos gets no
-  such check.
-- **Nothing here asserts a garmd floor.** `web/v0.2.0`'s catalogue needs
-  garmd v0.3.0 or later, because the v0.18.1 generator synthesises two card
-  endpoints per tool and an older daemon refuses them. `mise run check-web`
-  runs against the pinned garmd only, so it proves the floor is met, not
-  where the floor is. The annotation schema version is still `v1`, so the
+  constant. It now reads the version from every module's own `go.mod` and
+  compares `third_party` against each one, which is how `taxonomy` and `web`
+  on contracts v0.2.0 and `search` on v0.3.0 can share one vendored tree: the
+  two releases publish byte-identical protos, and the day one does not, the
+  check goes red. That closes it for this repository and for nobody else. A
+  consumer who copies these protos gets no such check.
+- **Nothing here asserts a garmd floor.** The `web/v0.2.0` and
+  `search/v0.1.0` catalogues need garmd v0.3.0 or later, because the
+  generator synthesises two card endpoints per tool and an older daemon
+  refuses them. `mise run check-web` and `mise run check-search` run against
+  the pinned garmd only, so they prove the floor is met, not where the floor
+  is. The annotation schema version is still `v1`, so the
   catalogue's own compatibility window does not express this.
 - **The card endpoints are registered but have no result store.** The
-  generated `DefaultResultCard` answers `result_unavailable`, because a card
-  about an answer needs the answer and nothing here keeps a record of what
-  `fetch_page` returned to somebody else. Overriding `ResultCard` and
-  reading your own row is the documented route; `webd` does not.
+  generated `DefaultWebServiceResultCard` answers `result_unavailable`
+  (`DefaultSearchServiceResultCard` likewise), because a card about an answer
+  needs the answer and nothing here keeps a record of what `fetch_page` or
+  `search_web` returned to somebody else. Overriding `ResultCard` and reading
+  your own row is the documented route; neither `webd` nor `searchd` does.
+  The identifiers are qualified by service since `garm` v0.19.0 — the bare
+  `DefaultResultCard` and `ResultCardFrom` this file used to name no longer
+  exist for any service, because two single-tool services in one proto
+  package declared them twice and the package did not compile.
 
 ## Not built, and why
+
+### `search_web`, specifically
+
+An **S** in the port assessment is an estimate of effort, not a claim of
+completeness. What `search/v0.1.0` does not do:
+
+- **One backend.** Brave only. `backend:` in the policy file exists so a
+  second adapter is a policy change and not a different binary, but there is
+  no second adapter. SearXNG — self-hosted, AGPL-3.0 over HTTP, no vendor at
+  all — is the obvious one for a deployment that cannot send queries to a
+  search company, and it is not written.
+- **No fallback between providers, no retry, no caching and no
+  deduplication.** Every call is a call the vendor bills, and an upstream
+  failure is a coded refusal rather than a second attempt somewhere else.
+- **No rate limit or spend cap of its own.** The vendor's `429` is surfaced
+  as a `429`; nothing here counts calls or money. A bank that needs a budget
+  needs it at the plane, not in one tool.
+- **No pagination.** `offset` is not exposed: one page, at most 20 results,
+  which is the most one upstream page carries.
+- **Only three fields are read** out of the vendor's answer — `url`, `title`,
+  `description` — because a field nobody looked at is a field nobody checked.
+  `extra_snippets`, freshness, language, country, safesearch and the news,
+  image, video and local verticals are all unexposed.
+- **The address floor is a second copy of `web`'s.** `floor.go` here and
+  `floor.go`/`dial.go` there are the same prefix list, the same `localNames`,
+  the same WHATWG "ends in a number" rule, and they can drift. They were not
+  extracted into a shared module because doing so retags `web` and moves an
+  adopter's dependency graph for no behaviour change; the right moment is the
+  third tool that needs them. Until then the two test files are the guard,
+  and they cover the same cases on purpose.
+- **Results are not fetched or verified.** A URL that passes the floor and
+  the policy is a URL that *may* be fetched, not one that exists, and the
+  index's claim that a page says something is the index's claim.
+- **Nothing correlates a search with the fetches that follow it.** A guard
+  cannot say "only fetch a URL search_web returned"; that is the taint bit
+  below, and it is not built either.
+- **The allowlists are two files.** Nothing checks that `search`'s result
+  allowlist is the same as, or narrower than, `web`'s fetch allowlist. An
+  operator who widens one and not the other gets an agent shown links it
+  cannot follow, or — worse — narrows search and not fetch and believes the
+  narrowing covers both.
+- **No adopter check.** `mise run adopt-check` walks the README's copy
+  commands for `web` from the module cache; there is no equivalent for
+  `search`, and there cannot be one until `search/v0.1.0` is on the proxy.
+
+### Across the repository
 
 - **`effects.untrusted_output` and taint escalation** (design 5.4, step 10).
   The wrapper marker is in-band because `garm.tool.v1` has no way yet to say

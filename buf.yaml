@@ -4,6 +4,7 @@ modules:
   # Not one module at the root: a buf module root must contain the full
   # package path, and a consumer copies a package's proto/ directory whole.
   - path: taxonomy/proto
+  - path: search/proto
   - path: web/proto
   # The garm annotations, vendored by `garm init`. A module of their own so
   # they are imported by their real path while staying OUT of what is

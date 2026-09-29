@@ -9,9 +9,13 @@ buf = "1"
 [tasks.cli]
 description = "Install the garm CLI at the pinned version"
 # Pinned, not @latest: the catalogue digest must not move because someone
-# upgraded a CLI on a laptop. v0.18.1 is the CLI alone — the annotations and
-# the wire types it used to carry are github.com/garm-ai/contracts now.
-run = "go install github.com/garm-ai/garm/cmd/garm@v0.18.1"
+# upgraded a CLI on a laptop. v0.19.0 is the CLI alone — the annotations and
+# the wire types it used to carry are github.com/garm-ai/contracts now — and
+# it is the first release whose generated card helpers are qualified by
+# service (Default<Service><Card>, <Service><Card>From). The bare names it
+# emitted before collide the moment one proto package holds two single-tool
+# services, which is a shape this repository is one module away from.
+run = "go install github.com/garm-ai/garm/cmd/garm@v0.19.0"
 
 [tasks.plugin]
 description = "Install the tool generator at the pinned version"
@@ -19,13 +23,13 @@ description = "Install the tool generator at the pinned version"
 # under you changes committed output for no reason anyone asked for. It must
 # be the same release as the CLI: one writes the catalogue, the other writes
 # the binding whose hash the catalogue is checked against.
-run = "go install github.com/garm-ai/garm/cmd/protoc-gen-garm-go@v0.18.1"
+run = "go install github.com/garm-ai/garm/cmd/protoc-gen-garm-go@v0.19.0"
 
 [tasks.daemon]
 description = "Install garmd at the pinned version, for the mount check"
 # v0.3.0, raised from v0.2.0, and it is a floor rather than a preference.
 #
-# protoc-gen-garm-go v0.18.1 synthesises two card endpoints beside every
+# protoc-gen-garm-go v0.18.1 and later synthesise two card endpoints beside every
 # tool, and a catalogue that carries them is REFUSED by garmd v0.2.x:
 # `tool "fetch_page_input_card": garm.card.v1.Card: field "kind" has no
 # policy and no message default`. A daemon that predates garm.card.v1 does
@@ -38,44 +42,53 @@ description = "Install garmd at the pinned version, for the mount check"
 run = "go install github.com/garm-ai/garmd/cmd/garmd@v0.3.2"
 
 [tasks."vendor-check"]
-description = "Fail if the vendored garm annotations differ from the contract version the modules require"
+description = "Fail if the vendored garm annotations differ from the contract version any module requires"
 # `garm init` writes the annotations verbatim out of github.com/garm-ai/contracts,
 # so drift is a byte comparison.
 #
-# The version is READ from go.mod, not written here. A constant in this file
-# only ever checks the tree against itself: that is how the vendored copies
-# sat five releases behind the module they compiled against without one red
-# run, and re-pinning the constant by hand would put the hole straight back.
-# Both modules that require the contract must require the same version, or
-# "the version this tree vendors" is not a thing.
+# The versions are READ from the go.mod files, not written here. A constant in
+# this file only ever checks the tree against itself: that is how the vendored
+# copies sat five releases behind the module they compiled against without one
+# red run, and re-pinning the constant by hand would put the hole straight back.
+#
+# Every module that requires the contract is checked, against ITS OWN version,
+# rather than one version the tree agrees on. taxonomy and web require v0.2.0
+# and search requires v0.3.0, and v0.3.0 changed wire/wire.go and not one
+# proto byte — so both comparisons pass over the same third_party tree, and
+# the day a release moves a .proto the check goes red and somebody has to
+# unify the tree instead of discovering it in a consumer.
 run = """
 set -e
-V_TAX=$(awk '$1 == "github.com/garm-ai/contracts" {print $2}' taxonomy/go.mod)
-V_WEB=$(awk '$1 == "github.com/garm-ai/contracts" {print $2}' web/go.mod)
-if [ -z "$V_TAX" ]; then
-  echo "taxonomy/go.mod does not require github.com/garm-ai/contracts" >&2; exit 1
+MODULES=""
+for m in taxonomy sanitize search web; do
+  [ -f "$m/go.mod" ] || continue
+  V=$(awk '$1 == "github.com/garm-ai/contracts" {print $2}' "$m/go.mod")
+  [ -n "$V" ] || continue
+  MODULES="$MODULES $m=$V"
+done
+if [ -z "$MODULES" ]; then
+  echo "no module requires github.com/garm-ai/contracts; nothing vendored here can be checked" >&2; exit 1
 fi
-if [ "$V_TAX" != "$V_WEB" ]; then
-  echo "taxonomy requires contracts $V_TAX and web requires $V_WEB; one tree cannot vendor two vocabularies" >&2
-  exit 1
-fi
-(cd taxonomy && GOWORK=off go mod download github.com/garm-ai/contracts@$V_TAX)
-SRC="$(go env GOMODCACHE)/github.com/garm-ai/contracts@$V_TAX/proto"
 # Every file that is actually vendored, rather than a list repeated here: a
 # file added to third_party and left out of this task is the same drift by
 # another route.
-for f in $(find third_party/proto -name '*.proto' | sort); do
-  rel="${f#third_party/proto/}"
-  if [ ! -f "$SRC/$rel" ]; then
-    echo "third_party/proto/$rel is not a file contracts $V_TAX publishes" >&2
-    exit 1
-  fi
-  if ! cmp -s "$SRC/$rel" "$f"; then
-    echo "third_party/proto/$rel differs from contracts $V_TAX; run 'garm init --force' in an empty directory and copy the file" >&2
-    exit 1
-  fi
+for pair in $MODULES; do
+  m="${pair%%=*}"; V="${pair#*=}"
+  (cd "$m" && GOWORK=off go mod download github.com/garm-ai/contracts@$V)
+  SRC="$(go env GOMODCACHE)/github.com/garm-ai/contracts@$V/proto"
+  for f in $(find third_party/proto -name '*.proto' | sort); do
+    rel="${f#third_party/proto/}"
+    if [ ! -f "$SRC/$rel" ]; then
+      echo "third_party/proto/$rel is not a file contracts $V publishes, which $m requires" >&2
+      exit 1
+    fi
+    if ! cmp -s "$SRC/$rel" "$f"; then
+      echo "third_party/proto/$rel differs from contracts $V, which $m requires; run 'garm init --force' in an empty directory and copy the file" >&2
+      exit 1
+    fi
+  done
+  echo "ok: the vendored annotations match contracts $V, which $m requires"
 done
-echo "ok: the vendored annotations match contracts $V_TAX, which is what both go.mod files require"
 """
 
 [tasks."buf-lint"]
@@ -98,8 +111,8 @@ run = "go test github.com/garm-ai/tools/... -race -count=1 -timeout 120s"
 run = """
 set -e
 go vet github.com/garm-ai/tools/...
-if [ -n "$(gofmt -l taxonomy sanitize web 2>/dev/null)" ]; then
-  echo "gofmt:" >&2; gofmt -l taxonomy sanitize web >&2; exit 1
+if [ -n "$(gofmt -l taxonomy sanitize search web 2>/dev/null)" ]; then
+  echo "gofmt:" >&2; gofmt -l taxonomy sanitize search web >&2; exit 1
 fi
 """
 
@@ -107,7 +120,7 @@ fi
 description = "Fail if any module's go.mod or go.sum is not tidy on its own, without the workspace"
 run = """
 set -e
-for m in taxonomy sanitize web; do
+for m in taxonomy sanitize search web; do
   [ -f "$m/go.mod" ] || continue
   (cd "$m" && GOWORK=off go mod tidy -diff) || { echo "$m is not tidy: run (cd $m && GOWORK=off go mod tidy)" >&2; exit 1; }
 done
@@ -121,7 +134,7 @@ description = "Each module builds and tests against published tags alone, with n
 # the working tree cannot stand in for a tag that was never pushed.
 run = """
 set -e
-for m in taxonomy sanitize web; do
+for m in taxonomy sanitize search web; do
   [ -f "$m/go.mod" ] || continue
   if grep -Eq '^\\s*replace\\s' "$m/go.mod"; then
     echo "$m/go.mod carries a replace directive; it is not building against published artifacts" >&2
@@ -141,6 +154,11 @@ dir = "taxonomy"
 depends = ["plugin"]
 run = "buf generate"
 
+[tasks."gen-search"]
+dir = "search"
+depends = ["plugin"]
+run = "buf generate"
+
 [tasks."gen-web"]
 dir = "web"
 depends = ["plugin"]
@@ -149,7 +167,7 @@ run = "buf generate"
 [tasks.gen]
 description = "Regenerate Go from the protos"
 depends = ["plugin"]
-run = ["mise run gen-taxonomy", "mise run gen-web"]
+run = ["mise run gen-taxonomy", "mise run gen-search", "mise run gen-web"]
 
 [tasks."gen-check"]
 description = "Fail if the committed generated code is stale"
@@ -167,9 +185,9 @@ description = "Fail if the committed generated code is stale"
 wait_for = ["build", "test", "lint", "acceptance"]
 run = """
 mise run gen
-if ! git diff --quiet -- taxonomy/gen web/gen; then
+if ! git diff --quiet -- taxonomy/gen search/gen web/gen; then
   echo "generated code is stale — run 'mise run gen' and commit:" >&2
-  git diff --stat -- taxonomy/gen web/gen >&2
+  git diff --stat -- taxonomy/gen search/gen web/gen >&2
   exit 1
 fi
 if [ -n "$(git ls-files --others --exclude-standard -- '*/gen/*')" ]; then
@@ -230,6 +248,7 @@ run = """
 set -e
 rm -rf build/proto && mkdir -p build/proto
 cp -R taxonomy/proto/. build/proto/
+cp -R search/proto/. build/proto/
 cp -R web/proto/. build/proto/
 echo "assembled build/proto:"
 find build/proto -type f | sort
@@ -239,6 +258,19 @@ find build/proto -type f | sort
 description = "garm lint over the assembled tree"
 depends = ["cli", "assemble"]
 run = "garm lint --proto build/proto"
+
+[tasks."catalogue-search"]
+description = "Build the search_web catalogue from the assembled tree"
+depends = ["cli", "assemble"]
+run = "garm catalogue build --proto build/proto -o build/search.binpb --source garm-ai/tools/search"
+
+[tasks."check-search"]
+description = "Assert the search_web catalogue mounts on a bare deployment"
+# search_web declares no approval and audit LEVEL_LEDGER only, so a garmd with
+# no grant verifier and no audit sink must mount it. A refusal here means an
+# annotation drifted into something this tool has no business declaring.
+depends = ["catalogue-search", "daemon"]
+run = "garmd check --catalogue build/search.binpb"
 
 [tasks."catalogue-web"]
 description = "Build the fetch_page catalogue from the assembled tree"
@@ -255,4 +287,4 @@ depends = ["catalogue-web", "daemon"]
 run = "garmd check --catalogue build/web.binpb"
 
 [tasks.ci]
-depends = ["vendor-check", "buf-lint", "lint-taxonomy", "lint-web", "check-web", "adopt-check", "lint", "build", "test", "tidy-check", "acceptance", "gen-check"]
+depends = ["vendor-check", "buf-lint", "lint-taxonomy", "lint-web", "check-search", "check-web", "adopt-check", "lint", "build", "test", "tidy-check", "acceptance", "gen-check"]
