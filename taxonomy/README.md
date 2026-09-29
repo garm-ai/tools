@@ -1,0 +1,41 @@
+# taxonomy
+
+**The vocabulary the garm-ai/tools packages share.** Two compartments and two
+tool sets, declared once, here, and imported by every tool proto in this
+repository that names them.
+
+## The declarations
+
+| Kind | Name | Meaning |
+|---|---|---|
+| compartment | `internet` | Reaching hosts outside the tenant over the public internet. Held by principals that may read from the web; *what* they may read is the fetch service's allowlist per deployment and a CEL guard per agent |
+| compartment | `generated-artefacts` | Files a tool produced during a run. Classified whole, at the creating run's level, because redaction cannot see inside a workbook |
+| tool set | `research` | Reading the outside world: fetching, searching. Tools whose output was written by someone outside the tenant |
+| tool set | `documents` | Producing and reading files |
+
+Reaching the internet is a compartment and not a clearance because it is a
+need-to-know question: a principal cleared to RESTRICTED still has no
+business on the web unless it holds `internet`. Clearance says how sensitive;
+a compartment says whose business it is.
+
+## Adopting it
+
+Copy `proto/tools/taxonomy/v1/taxonomy.proto` into your proto tree (from the
+module cache, `$(go env GOMODCACHE)/github.com/garm-ai/tools/taxonomy@v0.1.0/proto/`)
+and import it from any proto that names one of these compartments or sets,
+even though no symbol is referenced: the import graph should say that a tool
+depends on the file declaring its compartments.
+
+If your tree already declares one of these names with a different
+description, `garm catalogue build` fails naming both sources (L29). Adopt one
+definition or rename yours.
+
+The Go module (`go get github.com/garm-ai/tools/taxonomy@taxonomy/v0.1.0`)
+gives you the same four strings as constants (`taxonomy.CompartmentInternet`
+and friends) so a claims file or a test never misspells one, and links the
+file descriptor so the declarations can be read off it.
+
+## What is deliberately not here
+
+A `pii-*` or `financial` vocabulary. Those belong to the organisation that
+adopts these tools, not to the tools.

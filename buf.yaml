@@ -3,6 +3,7 @@ modules:
   # One module per package's proto tree, added by the task that creates it.
   # Not one module at the root: a buf module root must contain the full
   # package path, and a consumer copies a package's proto/ directory whole.
+  - path: taxonomy/proto
   # The garm annotations, vendored by `garm init`. A module of their own so
   # they are imported by their real path while staying OUT of what is
   # generated: Go for them already exists in github.com/garm-ai/garm/contracts,

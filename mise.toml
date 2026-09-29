@@ -102,5 +102,34 @@ done
 echo "ok: every module stands on tags alone"
 """
 
+[tasks."gen-taxonomy"]
+dir = "taxonomy"
+depends = ["plugin"]
+run = "buf generate"
+
+[tasks.gen]
+description = "Regenerate Go from the protos"
+depends = ["plugin"]
+run = ["mise run gen-taxonomy"]
+
+[tasks."gen-check"]
+description = "Fail if the committed generated code is stale"
+# Generated code is COMMITTED, because a Go module has to build from its own
+# source: a consumer runs `go build`, not buf plus two plugins. The cost of
+# committing is drift, and this is the check that pays it.
+run = """
+mise run gen
+if ! git diff --quiet -- taxonomy/gen web/gen; then
+  echo "generated code is stale — run 'mise run gen' and commit:" >&2
+  git diff --stat -- taxonomy/gen web/gen >&2
+  exit 1
+fi
+"""
+
+[tasks."lint-taxonomy"]
+description = "garm lint over the taxonomy alone"
+depends = ["cli"]
+run = "garm lint --proto taxonomy/proto"
+
 [tasks.ci]
-depends = ["vendor-check", "buf-lint", "lint", "build", "test", "tidy-check", "acceptance"]
+depends = ["vendor-check", "buf-lint", "lint-taxonomy", "lint", "build", "test", "tidy-check", "acceptance", "gen-check"]

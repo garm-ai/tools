@@ -1,0 +1,47 @@
+// The vocabulary the garm-ai/tools packages share: which compartments and
+// tool sets their tools name.
+//
+// A tool that reaches the public internet needs a compartment, not a
+// clearance: reaching outside the tenant is a need-to-know question, and a
+// principal cleared to RESTRICTED still has no business on the web unless it
+// holds `internet`. A tool that produces files gets `generated-artefacts`
+// for the same reason: the file outlives the conversation it was made in.
+//
+// A package brings its own taxonomy. Adopting `web` means adopting this
+// file: copy it into your proto tree beside the package's protos. If your
+// tree already declares one of these names, identical declarations merge and
+// any difference fails your catalogue build naming both sources (L29).
+syntax = "proto3";
+
+package tools.taxonomy.v1;
+
+import "garm/tool/v1/tool.proto";
+
+option go_package = "github.com/garm-ai/tools/taxonomy/gen/tools/taxonomy/v1;taxonomyv1";
+
+option (garm.tool.v1.compartments) = {
+  declared: [
+    { name: "internet"
+      description: "Reaching hosts outside the tenant over the public "
+                   "internet. Held by principals that may read from the web; "
+                   "what they may read is decided per deployment by the fetch "
+                   "service's allowlist and per agent by a guard." },
+    { name: "generated-artefacts"
+      description: "Files produced by a tool during a run: workbooks, "
+                   "documents, presentations, HTML. Classified whole, at the "
+                   "creating run's level, because redaction cannot see inside "
+                   "them." }
+  ]
+};
+
+option (garm.tool.v1.tool_sets) = {
+  declared: [
+    { name: "research"
+      description: "Reading the outside world: fetching pages, searching. "
+                   "Tools whose output was written by someone outside the "
+                   "tenant." },
+    { name: "documents"
+      description: "Producing and reading files: workbooks, documents, "
+                   "presentations, extraction." }
+  ]
+};

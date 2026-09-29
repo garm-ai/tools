@@ -6,8 +6,8 @@ served as NATS micro services behind [garmd](https://github.com/garm-ai/garmd),
 and maintained here. You take the packages you want and nothing else.
 
 Status, 29 September 2026: phase 1 (`taxonomy`, `sanitize`, `fetch_page`) is
-in implementation. Nothing here is released yet. `KNOWN-GAPS.md` says what is
-built; the roadmap below says what arrives when.
+in implementation. `taxonomy/v0.1.0` is tagged; nothing else is released yet.
+`KNOWN-GAPS.md` says what is built; the roadmap below says what arrives when.
 
 ## Contents
 
@@ -48,7 +48,7 @@ buys an independence nobody asked for at the cost of N pipelines.
 
 | Package | Module | Tag | What it declares |
 |---|---|---|---|
-| `taxonomy/` | `github.com/garm-ai/tools/taxonomy` | in progress | The compartments and tool sets the packages here share: `internet`, `generated-artefacts`; `research`, `documents` |
+| `taxonomy/` | `github.com/garm-ai/tools/taxonomy` | `taxonomy/v0.1.0` | The compartments and tool sets the packages here share: `internet`, `generated-artefacts`; `research`, `documents` |
 | `sanitize/` | `github.com/garm-ai/tools/sanitize` | in progress | Cleaning and wrapping text an attacker may have written, before a model reads it |
 | `web/` | `github.com/garm-ai/tools/web` | in progress | `web.v1.fetch_page`: one public https page in, its readable text out, behind an allowlist and an SSRF floor |
 
@@ -60,7 +60,7 @@ The full set, planned and intended:
 
 | Package | What it gives an agent | Risk class | State |
 |---|---|---|---|
-| `taxonomy` | The shared vocabulary: `internet` and `generated-artefacts` compartments; `research` and `documents` tool sets | none | phase 1, in progress |
+| `taxonomy` | The shared vocabulary: `internet` and `generated-artefacts` compartments; `research` and `documents` tool sets | none | phase 1, tagged `taxonomy/v0.1.0` |
 | `sanitize` | Normalises untrusted content before it reaches a model: control characters, injection sentinels, length caps, an untrusted marker | none | phase 1, in progress |
 | `web` | `fetch_page`: a governed page fetcher with a host allowlist and blocklist, an SSRF floor, redirect re-checks, text extraction | prompt injection, exfiltration | phase 1, in progress |
 | `web` | `search_web`: a search client whose results are filtered by the same host policy | prompt injection | planned, phase 2 |
@@ -204,8 +204,10 @@ Go 1.26, `mise` for the toolchain, `buf` for protos.
 
 ```
 mise install          the toolchain
-mise run ci           what CI runs: vendor-check, buf-lint, lint, build, test, tidy-check, acceptance
-                      plus lint-taxonomy, lint-web, catalogue-web, check-web, gen-check once those exist
+mise run ci           what CI runs: vendor-check, buf-lint, lint-taxonomy, lint, build, test,
+                      tidy-check, acceptance, gen-check
+                      plus lint-web, catalogue-web, check-web once those exist
+mise run gen          regenerate the committed Go from the protos
 ```
 
 Each module is tidied on its own: `(cd web && GOWORK=off go mod tidy)`. A
