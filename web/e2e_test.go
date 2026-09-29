@@ -48,7 +48,7 @@ func runWeb(t *testing.T) (*nats.Conn, *site) {
 
 	s := newSite(t, fakeInternet())
 	f := s.fetcher(t, testPolicy(t, testPolicyYAML), slog.New(slog.DiscardHandler))
-	svc := garmtool.New("web", "v0.1.0", garmtool.WithConcurrency(4))
+	svc := garmtool.New("web", "v0.1.1", garmtool.WithConcurrency(4))
 	if err := webv1.ServeWebService(svc, web.NewService(f)); err != nil {
 		t.Fatal(err)
 	}

@@ -55,8 +55,12 @@ message FetchPageResponse {
     on_deny: { omit: {} }
   };
 
-  // Where the fetch ended after redirects. A caller who may not read the
-  // path still learns the origin, which is what a redirect check needs.
+  // Where the fetch ended after redirects: origin and path; never the
+  // query, the fragment or credentials. After a redirect this is the page's
+  // choice, so it is cleaned the same way as content (invisible characters
+  // and marker look-alikes removed) and capped at 2048 characters, the
+  // request URL's own limit. A caller who may not read the path still
+  // learns the origin, which is what a redirect check needs.
   optional string final_url = 1 [(garm.tool.v1.field_policy) = {
     read: CLEARANCE_INTERNAL
     on_deny: { url_origin: {} }

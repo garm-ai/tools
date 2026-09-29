@@ -14,7 +14,10 @@ and `docs/research/20260929_hermes-agent-tools-port-assessment.md` in `../docs`)
   everything it knows and the daemon redacts.
 - **Nothing the page sent reaches a log line or an error message.** A refused
   redirect target's origin is the one exception, and it is the same
-  disclosure `url_origin` permits.
+  disclosure `url_origin` permits; it is echoed only when its host is a DNS
+  name or an IP literal. Of a response, `final_url` is the field a page can
+  choose after a redirect: origin and path only, cleaned and capped like the
+  title, never the query.
 - **Fail closed.** A policy that cannot be read stops the service at boot.
 
 ## Working here

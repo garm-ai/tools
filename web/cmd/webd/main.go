@@ -92,8 +92,8 @@ func run(log *slog.Logger) error {
 }
 
 // version is the module version the toolchain stamped, which the daemon
-// reads back from $SRV.INFO: v0.1.0 when installed with
-// `go install …/cmd/webd@v0.1.0`. Any in-tree build — tagged checkout or
+// reads back from $SRV.INFO: v0.1.1 when installed with
+// `go install …/cmd/webd@v0.1.1`. Any in-tree build — tagged checkout or
 // not — is stamped "(devel)", because Go stamps only a root module's tag and
 // web is a nested module; "(devel)" is not a version NATS micro accepts, so
 // it is reported as a dev build.

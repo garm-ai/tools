@@ -53,7 +53,7 @@ func ServeWebService(r toolbind.Registrar, h WebServiceHandler) error {
 // ContractVersion is the tag this binding was generated from, stamped
 // from the contract_version plugin parameter, or "dev" when that is
 // unset (no tagged build, e.g. this branch).
-const ContractVersion = "v0.1.0"
+const ContractVersion = "v0.1.1"
 
 // DescriptorHash is a SHA-256 digest over the WIRE-RELEVANT shape of
 // every tool's input and output message in this package, transitively:

@@ -81,16 +81,17 @@ func (s *Service) FetchPage(ctx context.Context, req *webv1.FetchPageRequest) (*
 	body := sanitize.Clean(ex.Text, limit)
 	wrapped := sanitize.Wrap(body, origin(pg.FinalURL))
 	sum := sha256.Sum256([]byte(wrapped))
+	final := finalURL(pg.FinalURL)
 
 	resp := &webv1.FetchPageResponse{
-		FinalUrl:      proto.String(pg.FinalURL.String()),
+		FinalUrl:      proto.String(final.Text),
 		HttpStatus:    proto.Uint32(uint32(pg.Status)),
 		Content:       proto.String(wrapped),
 		Truncated:     proto.Bool(pg.Truncated || body.Truncated),
 		ContentSha256: proto.String(hex.EncodeToString(sum[:])),
 		PolicyDigest:  proto.String(s.f.policy.Digest()),
 		FetchedAt:     proto.String(start.UTC().Format(time.RFC3339)),
-		Notices:       body.Notices,
+		Notices:       mergeNotices(body.Notices, final.Notices),
 	}
 	// The title is page text too: cleaned the same way, and anything the
 	// sanitiser noticed in it joins the response's notices. The wrapper
@@ -99,7 +100,7 @@ func (s *Service) FetchPage(ctx context.Context, req *webv1.FetchPageRequest) (*
 	if title := sanitize.Clean(ex.Title, maxTitleRunes); title.Text != "" {
 		t := strings.TrimSuffix(title.Text, sanitize.TruncationNote)
 		resp.Title = proto.String(strings.ReplaceAll(t, "\n", " "))
-		resp.Notices = mergeNotices(body.Notices, title.Notices)
+		resp.Notices = mergeNotices(resp.Notices, title.Notices)
 	}
 
 	s.f.log.InfoContext(ctx, "fetch_page", append(attrs,
@@ -109,6 +110,23 @@ func (s *Service) FetchPage(ctx context.Context, req *webv1.FetchPageRequest) (*
 		"duration_ms", s.f.now().Sub(start).Milliseconds(),
 	)...)
 	return resp, nil
+}
+
+// maxFinalURLRunes is the request URL's own cap (max_len in web.proto). A
+// longer final_url can only have come from a Location a page chose.
+const maxFinalURLRunes = 2048
+
+// finalURL is what the response says about where the fetch ended: scheme,
+// host and path, never the query, the fragment or credentials. After a
+// redirect the URL is the page's choice: the host passed every check, the
+// path is percent-encoded by net/url, and the whole is cleaned like any
+// other page text (invisible characters and marker look-alikes cannot
+// survive it) and capped at the request URL's own limit. A caller who may
+// not read the path is shown the origin by url_origin.
+func finalURL(u *url.URL) sanitize.Cleaned {
+	c := sanitize.Clean(u.Scheme+"://"+u.Host+u.EscapedPath(), maxFinalURLRunes)
+	c.Text = strings.TrimSuffix(c.Text, sanitize.TruncationNote)
+	return c
 }
 
 // refused logs a refusal by its code alone. The message can name a

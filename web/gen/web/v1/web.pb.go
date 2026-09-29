@@ -97,8 +97,12 @@ func (x *FetchPageRequest) GetCharLimit() uint32 {
 
 type FetchPageResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Where the fetch ended after redirects. A caller who may not read the
-	// path still learns the origin, which is what a redirect check needs.
+	// Where the fetch ended after redirects: origin and path; never the
+	// query, the fragment or credentials. After a redirect this is the page's
+	// choice, so it is cleaned the same way as content (invisible characters
+	// and marker look-alikes removed) and capped at 2048 characters, the
+	// request URL's own limit. A caller who may not read the path still
+	// learns the origin, which is what a redirect check needs.
 	FinalUrl   *string `protobuf:"bytes,1,opt,name=final_url,json=finalUrl,proto3,oneof" json:"final_url,omitempty"`
 	HttpStatus *uint32 `protobuf:"varint,2,opt,name=http_status,json=httpStatus,proto3,oneof" json:"http_status,omitempty"`
 	// The page's <title>, cleaned the same way as content. Absent for

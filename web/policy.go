@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"regexp"
 	"sort"
@@ -63,10 +64,28 @@ type Policy struct {
 	digest string
 }
 
+// hostLabels is the shape of a DNS name as every check here compares it:
+// lower-case labels of letters, digits and hyphens, joined by dots.
+const hostLabels = `[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*`
+
 // hostRule is what an allow or block entry may look like: lower-case DNS
 // labels, optionally led by "*.". No scheme, no port, no path — an entry
 // that carried one would silently match nothing.
-var hostRule = regexp.MustCompile(`^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$`)
+var hostRule = regexp.MustCompile(`^(\*\.)?` + hostLabels + `$`)
+
+// hostName is hostRule without the wildcard: the shape a host itself has.
+var hostName = regexp.MustCompile(`^` + hostLabels + `$`)
+
+// isHostName says whether host, normalised by hostOf, is a name DNS could
+// carry or an IP literal (which the floor then refuses, naming it): the
+// only two shapes a refusal may echo. Everything url.Parse accepts in a
+// host beyond these is not a host.
+func isHostName(host string) bool {
+	if _, err := netip.ParseAddr(host); err == nil {
+		return true
+	}
+	return hostName.MatchString(host)
+}
 
 // LoadPolicy reads a policy file. Any problem is an error and the caller
 // must not serve: a service that starts on a policy it could not read is

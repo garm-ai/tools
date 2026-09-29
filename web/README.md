@@ -4,13 +4,22 @@
 wrapped as untrusted.** The first tool of the Hermes port, and the model for
 every untrusted-content tool that follows it.
 
-Status: tagged `web/v0.1.0`. The contract lints, builds a catalogue and
+Status: tagged `web/v0.1.1`. The contract lints, builds a catalogue and
 mounts on a bare deployment; the policy file, the SSRF floor, the guarded
 dialer, extraction, the fetcher and the handler are built and tested against
 a local https server behind a fake resolver; `webd` serves `fetch_page` over
 NATS, and an end-to-end test drives it over an embedded NATS server with the
 `Garm-Invocation` header garmd sends. What is deliberately not built is in
 `../KNOWN-GAPS.md`.
+
+What changed in `v0.1.1`, from the whole-branch review of `v0.1.0`:
+`final_url` is origin and path only, cleaned and capped, never the query a
+redirect chose; a redirect to a host that is not a DNS name is refused
+without echoing it; `noembed` and `noframes` text is dropped; a negative
+margin of a thousand pixels or more hides; the repository README's copy
+step works from the read-only module cache and CI runs it (`adopt-check`).
+The proto's fields and annotations are unchanged; the comment on
+`final_url` says what it now carries.
 
 ```
 proto/web/v1/web.proto     the declaration: what the tool is, who may see it, what it returns
@@ -74,19 +83,22 @@ what it was shown.
 ## What the response is
 
 `content` is the page's text after extraction (`script`, `style`,
-`template`, `noscript`, `iframe`, `object`, `svg`, comments and hidden
-elements dropped) and after `sanitize.Clean` (NFC, invisible characters
-removed, whitespace collapsed, sentinels neutralised, capped at
-`char_limit`), between `<<<untrusted-content source="…">>>` and
+`template`, `noscript`, `noembed`, `noframes`, `iframe`, `object`, `svg`,
+comments and hidden elements dropped) and after `sanitize.Clean` (NFC,
+invisible characters removed, whitespace collapsed, sentinels neutralised,
+capped at `char_limit`), between `<<<untrusted-content source="…">>>` and
 `<<<end-untrusted-content>>>`.
 
 Extraction is one pass over `golang.org/x/net/html`'s tokenizer, no DOM.
 "Hidden" means the `hidden` attribute, `aria-hidden="true"`, or an inline
 `style` that says `display:none`, `visibility:hidden`, `opacity:0` (or
-`.0`), `font-size:0`, `color:transparent`, or `left`/`top`/`right`/
-`bottom`/`text-indent` of three or more digits off the page. Property names
-are anchored to the start of the style or the separator before them, so
-`margin-left:-100px` and `background-color:transparent` hide nothing. A hidden element's whole subtree is dropped, by counting the nesting
+`.0`), `font-size:0`, `color:transparent`, `left`/`top`/`right`/
+`bottom`/`text-indent` of three or more digits off the page, or a `margin`
+(any side, any position of the shorthand) of four or more digits negative.
+Property names are anchored to the start of the style or the separator
+before them, so `background-color:transparent` is a background and
+`margin-left:-100px` a layout pull, neither of which hides anything, while
+`margin-left:-9999px` is off the page. A hidden element's whole subtree is dropped, by counting the nesting
 of the tag that opened it; a self-closing non-void tag (`<div hidden/>`)
 opens a subtree the way a browser opens one. Block elements start a line;
 `<title>` is returned separately and never appears in the text. A
@@ -95,7 +107,12 @@ What an external stylesheet or a class hides cannot be seen from the
 markup and is not dropped (see `KNOWN-GAPS.md`). `notices` repeats the sanitiser's annotations
 as data, over the content and the title together; the wrapper header
 carries the content's notices only, because it describes the text it
-encloses. `title` is cleaned like the content and cut at 200 characters. `content_sha256` is over `content` as returned. `policy_digest`
+encloses. `title` is cleaned like the content and cut at 200 characters.
+`final_url` is where the fetch ended: origin and path, never the query or
+the fragment, because after a redirect it is the page's choice; the path is
+percent-encoded, the whole is cleaned like the title (its notices join
+`notices`) and cut at 2048 characters, the request URL's own limit.
+`content_sha256` is over `content` as returned. `policy_digest`
 identifies the lists in force, so a ledger row joins to the exact policy
 that permitted the fetch.
 
@@ -109,7 +126,7 @@ refused.
 | Code | When | The message names |
 |---|---|---|
 | `400` | the URL does not parse or has no host; the call arrived with no invocation context | nothing |
-| `403` | the scheme is not `https`; the URL carries credentials; the host is an IP literal, a local or metadata name, off the allowlist or on the blocklist; a host resolved to a non-public address; a redirect target failed any of these, had no host, could not be parsed, or was not `http`/`https`; more than `max_redirects` hops | the scheme, the host, or the matching rule; for a redirect, the target's **origin** only, quoted, capped at 256 characters, and only when its scheme is `http` or `https` |
+| `403` | the scheme is not `https`; the URL carries credentials; the host is an IP literal, a local or metadata name, off the allowlist or on the blocklist; a host resolved to a non-public address; a redirect target failed any of these, had no host, could not be parsed, was not `http`/`https`, or had a host that is neither a DNS name nor an IP literal (`url.Parse` accepts `<`, `>`, `"` and raw UTF-8 in a host; DNS does not); more than `max_redirects` hops | the scheme, the host, or the matching rule; for a redirect, the target's **origin** only, quoted, capped at 256 characters, and only when its scheme is `http` or `https` and its host is a name or an IP literal — otherwise a fixed message and nothing of the target |
 | `404` | upstream answered 404 | nothing |
 | `415` | the content type is not `text/html`, `application/xhtml+xml` or `text/plain` | the media type if it is well known (`application/pdf`, `image/png`, ...), its top level with a wildcard (`text/*`) if only that is, else `"unknown"`; never the header's own words |
 | `502` | the host did not resolve, the connection failed, the body could not be read, or upstream answered any other 3xx/4xx/5xx (a 3xx without a `Location` is not a page) | the host, or the status code |
@@ -138,9 +155,11 @@ verified against the system roots. The `User-Agent` is the policy's
 
 ## Adopting it
 
-`go get github.com/garm-ai/tools/web@v0.1.0` (the git tag is `web/v0.1.0`),
-then copy `proto/` and the taxonomy's `proto/` into your tree (see the
-repository README). Your `main` registers
+`go get github.com/garm-ai/tools/web@v0.1.1` (the git tag is `web/v0.1.1`),
+then copy `proto/` and the taxonomy's `proto/` into your tree (the
+repository README has the commands: create the directory first and
+`chmod -R u+w` after, because the module cache is read-only and `cp -R`
+keeps its modes). Your `main` registers
 `webv1.ServeWebService(svc, web.NewService(web.NewFetcher(policy)))` on a
 `garmtool` service, or you run `cmd/webd` as is.
 
@@ -171,7 +190,7 @@ mise run lint-web         # garm lint over the assembled tree
 mise run catalogue-web    # build/web.binpb
 mise run check-web        # garmd check: mounts on a bare deployment
 go run ./web/cmd/webd --policy web/policy.example.yaml   # from the repository root; against a local NATS
-go install github.com/garm-ai/tools/web/cmd/webd@v0.1.0   # the deployment form: the binary advertises v0.1.0
+go install github.com/garm-ai/tools/web/cmd/webd@v0.1.1   # the deployment form: the binary advertises v0.1.1
 ```
 
 `webd` connects, loads the policy (and stops if it cannot), registers
@@ -180,8 +199,8 @@ go install github.com/garm-ai/tools/web/cmd/webd@v0.1.0   # the deployment form:
 bounds fetches in flight; the invocation's deadline, when garmd sends one,
 bounds each call on top of the policy `timeout`; a `--concurrency` of zero
 or less is refused at boot. The version it advertises is the module version
-the toolchain stamped: `v0.1.0` when installed from the tag with `go install
-…/cmd/webd@v0.1.0`, and `0.0.0-dev` from any in-tree `go build` or `go run`
+the toolchain stamped: `v0.1.1` when installed from the tag with `go install
+…/cmd/webd@v0.1.1`, and `0.0.0-dev` from any in-tree `go build` or `go run`
 — Go stamps only a root module's tag, and `web` is a nested module, so a
 build of the tagged checkout still reads `(devel)`.
 

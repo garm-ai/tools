@@ -2,7 +2,7 @@
 
 ## Built
 
-Phase 1 is tagged: `taxonomy/v0.1.1`, `sanitize/v0.1.1`, `web/v0.1.0`.
+Phase 1 is tagged: `taxonomy/v0.1.1`, `sanitize/v0.1.1`, `web/v0.1.1`.
 
 - `taxonomy` - `internet`, `generated-artefacts`; `research`, `documents`, as a
   proto file a consumer copies and a Go module with the same four strings as
@@ -51,8 +51,11 @@ Phase 1 is tagged: `taxonomy/v0.1.1`, `sanitize/v0.1.1`, `web/v0.1.0`.
   `aria-hidden`, and inline `style`. Text hidden by an external stylesheet, a
   class (`sr-only`, `visually-hidden`), a `clip`/`clip-path` rule, or a
   zero-height overflow box is not dropped and reaches the sanitiser like any
-  other text. Rendering CSS is out of scope for a text tool; the sanitiser's
-  injection-phrase notice is the backstop.
+  other text. A negative margin is judged by size alone: `-1000px` and
+  beyond is off the page and dropped, anything smaller (`margin-left:-500px`)
+  is a layout pull and kept, whether or not it hides in practice. Rendering
+  CSS is out of scope for a text tool; the sanitiser's injection-phrase
+  notice is the backstop.
 - **A hidden element whose end tag is omitted drops the rest of the
   document.** HTML lets `p`, `li`, `td`, `tr`, `dt`, `dd` and `option` close
   implicitly when the next sibling opens; extraction counts explicit end tags

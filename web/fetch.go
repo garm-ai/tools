@@ -138,7 +138,9 @@ const maxOriginRunes = 256
 // target is the page's choice, so every refusal is 403 and the message
 // repeats at most the target's origin, capped and quoted (the form
 // CheckHost gives a host), and only when its scheme is one a reader would
-// recognise.
+// recognise and its host is a name DNS could carry or an IP literal.
+// url.Parse accepts `<`, `>`, `"` and raw UTF-8 in a host; a host with
+// those is never a name, and the fixed message here echoes none of it.
 func (f *Fetcher) checkHop(u *url.URL) error {
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return refusal("403", "redirect refused: the target is not an https URL")
@@ -146,8 +148,8 @@ func (f *Fetcher) checkHop(u *url.URL) error {
 	if u.Hostname() == "" {
 		return refusal("403", "redirect refused: the target has no host")
 	}
-	if utf8.RuneCountInString(u.Hostname()) > maxHostRunes {
-		return refusal("403", "redirect refused: the target host is not a valid name")
+	if host := hostOf(u); utf8.RuneCountInString(host) > maxHostRunes || !isHostName(host) {
+		return refusal("403", "redirect refused: the target is not a valid host name")
 	}
 	err := f.checkURL(u)
 	if err == nil {

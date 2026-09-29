@@ -194,3 +194,36 @@ func TestHiddenPropertyNamesAreAnchored(t *testing.T) {
 		}
 	}
 }
+
+func TestNoembedAndNoframesAreNeverRendered(t *testing.T) {
+	ex := extractHTML([]byte(`<noembed>noembed-text</noembed><noframes><p>noframes-text</p></noframes><p>after</p>`))
+	text := sanitize.Clean(ex.Text, 0).Text
+	for _, gone := range []string{"noembed-text", "noframes-text"} {
+		if strings.Contains(text, gone) {
+			t.Errorf("%q is text a browser never shows and leaked: %q", gone, text)
+		}
+	}
+	if !strings.Contains(text, "after") {
+		t.Errorf("text after the skipped elements was lost: %q", text)
+	}
+}
+
+func TestAMarginOffThePageIsHidden(t *testing.T) {
+	ex := extractHTML([]byte(`<p style="position:absolute; margin-left:-9999px">margin-hidden</p>` +
+		`<p style="margin: 0 0 0 -10000px">shorthand-hidden</p>` +
+		`<p style="MARGIN-TOP : -1000px">top-hidden</p>` +
+		`<p style="margin-left:-100px">pulled</p>` +
+		`<p style="margin-top:-999px">pulled-far</p>` +
+		`<p style="margin:10px -5px">tight</p>`))
+	text := sanitize.Clean(ex.Text, 0).Text
+	for _, gone := range []string{"margin-hidden", "shorthand-hidden", "top-hidden"} {
+		if strings.Contains(text, gone) {
+			t.Errorf("%q is off the page and leaked: %q", gone, text)
+		}
+	}
+	for _, want := range []string{"pulled", "pulled-far", "tight"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("%q is a layout pull a reader sees, missing from %q", want, text)
+		}
+	}
+}

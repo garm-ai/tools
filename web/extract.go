@@ -14,9 +14,12 @@ type extracted struct {
 	Text  string
 }
 
-// skipTags never contribute text a reader sees.
+// skipTags never contribute text a reader sees. noembed and noframes are
+// the fallbacks for a browser without plugins or frames, which no modern
+// browser is, so their text is never rendered.
 var skipTags = map[string]bool{
 	"script": true, "style": true, "template": true, "noscript": true,
+	"noembed": true, "noframes": true,
 	"iframe": true, "object": true, "embed": true, "svg": true, "canvas": true,
 	"textarea": true, "select": true,
 }
@@ -46,9 +49,12 @@ var voidTags = map[string]bool{
 // font-size:0.9em are small print, which a reader sees; opacity:.0 is a
 // zero written without its leading digit. Every property name is anchored
 // to the start of the style or to the separator before it, so that
-// margin-left:-100px is a margin and background-color:transparent is a
-// background, neither of which hides anything.
-var hiddenStyle = regexp.MustCompile(`(?i)(^|[;\s])(display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*(0(\.0+)?|\.0+)([^.\d]|$)|font-size\s*:\s*0(\.0+)?(px|pt|em|rem|%)?([^.\d]|$)|color\s*:\s*transparent|(left|top|right|bottom|text-indent)\s*:\s*-\d{3,})`)
+// background-color:transparent is a background, which hides nothing. A
+// negative margin of a few hundred pixels is a layout pull a reader still
+// sees (full-bleed sections, overlapping images); one of a thousand or more,
+// in any position of the shorthand, is the classic margin-left:-9999px and
+// is off the page like a negative left.
+var hiddenStyle = regexp.MustCompile(`(?i)(^|[;\s])(display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*(0(\.0+)?|\.0+)([^.\d]|$)|font-size\s*:\s*0(\.0+)?(px|pt|em|rem|%)?([^.\d]|$)|color\s*:\s*transparent|(left|top|right|bottom|text-indent)\s*:\s*-\d{3,}|margin(-(left|right|top|bottom))?\s*:\s*([^;]*\s)?-\d{4,})`)
 
 func hidden(attrs []html.Attribute) bool {
 	for _, a := range attrs {
