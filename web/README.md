@@ -4,20 +4,19 @@
 wrapped as untrusted.** The first tool of the Hermes port, and the model for
 every untrusted-content tool that follows it.
 
-Status: the contract is declared, lints, builds a catalogue and mounts; the
-policy file loads, the SSRF floor and guarded dialer are in place, extraction
-(`extract.go`: HTML to the text a reader sees) is built, and the fetcher and
-the handler (`fetch.go`, `handler.go`: every refusal class, the wrapped
-response, the one log line) are built and tested against a local https
-server behind a fake resolver; `webd` is not built yet and the module is not
-tagged.
-`web/v0.1.0` arrives with `webd`.
+Status: tagged `web/v0.1.0`. The contract lints, builds a catalogue and
+mounts on a bare deployment; the policy file, the SSRF floor, the guarded
+dialer, extraction, the fetcher and the handler are built and tested against
+a local https server behind a fake resolver; `webd` serves `fetch_page` over
+NATS, and an end-to-end test drives it over an embedded NATS server with the
+`Garm-Invocation` header garmd sends. What is deliberately not built is in
+`../KNOWN-GAPS.md`.
 
 ```
 proto/web/v1/web.proto     the declaration: what the tool is, who may see it, what it returns
 gen/web/v1/                 the messages and the binding (`ServeWebService`), committed
 policy.example.yaml         the allow and block lists a deployment writes
-cmd/webd                    the service: connect, load the policy, register, run, drain (arrives with the service)
+cmd/webd                    the service: connect, load the policy, register, run, drain
 ```
 
 ## The annotation block, line by line
@@ -163,3 +162,52 @@ properties a reviewer should hold it to:
   permitted a fetch. Caps do not enter the digest.
 
 A policy is loaded once. Reloading on a signal is a known gap.
+
+## Running it
+
+```bash
+mise run gen-web          # messages and the binding
+mise run lint-web         # garm lint over the assembled tree
+mise run catalogue-web    # build/web.binpb
+mise run check-web        # garmd check: mounts on a bare deployment
+go run ./web/cmd/webd --policy web/policy.example.yaml   # against a local NATS
+```
+
+`webd` connects, loads the policy (and stops if it cannot), registers
+`fetch_page`, serves until SIGTERM, then drains. `--nats` (default
+`nats://127.0.0.1:4222`) names the broker; `--concurrency` (default 8)
+bounds fetches in flight; the invocation's deadline, when garmd sends one,
+bounds each call on top of the policy `timeout`. The version it advertises
+is the module version the toolchain stamped (`v0.1.0` from a build of the
+tag), or `0.0.0-dev` from an untagged tree.
+
+## What one call looks like
+
+1. `Garm-Invocation` is decoded by tool-go; a request without one is `400`
+   and never reaches the handler.
+2. The URL is parsed; scheme, credentials, the host floor, the block list
+   and the allow list are checked, in that order, before DNS.
+3. The dialer resolves the name itself, refuses unless every address is
+   public, and connects to the vetted address. Every redirect hop is
+   re-checked as in 2 and dials as in 3; more than `max_redirects` is
+   refused.
+4. The body is read up to `max_body_bytes` (`truncated` when more);
+   `text/html`, `application/xhtml+xml` and `text/plain` only.
+5. Text is extracted, cleaned, capped at `char_limit`, wrapped, hashed.
+6. One log line: `tool=fetch_page tenant=... subject=... call_id=... host=...
+   status=... bytes=... truncated=... duration_ms=...`, or `fetch_page refused
+   ... code=403`. Nothing the page sent is on it.
+
+Refusals are coded errors: `403` for every policy and floor refusal
+(redirects included; the message names the rule or the reason), `400` for a
+URL that cannot be parsed or a call with no invocation context, `404` for an
+upstream 404, `415` for a content type this tool does not read, `502` for a
+DNS or upstream failure, `504` for a timeout. The message never carries
+upstream body text.
+
+## Tests
+
+`go test ./...` runs everything against a local https server behind a fake
+resolver and a fake dial, and an embedded NATS server for the end-to-end
+test (`e2e_test.go`). Every refusal class in the design has a test; see
+`service_test.go`.
