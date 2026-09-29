@@ -145,6 +145,42 @@ if [ -n "$(git ls-files --others --exclude-standard -- '*/gen/*')" ]; then
 fi
 """
 
+[tasks."adopt-check"]
+description = "Walk the README's adopter step from the module cache into a temp dir, then garm lint and garm catalogue build over it"
+# The README's copy commands read from the module cache, which is read-only,
+# and `assemble` copies from the writable working tree, so it can never
+# notice a command that fails on a fresh machine. This runs the README's
+# commands as written against the bytes a consumer gets: taxonomy at the
+# version web/go.mod requires, web at the nearest web/* tag. Before that tag
+# is on the proxy it cannot be in the cache, so the task says so and passes;
+# once the tag is cut it is a real check.
+depends = ["cli"]
+run = """
+set -e
+TAXONOMY=$(awk '$1 == "github.com/garm-ai/tools/taxonomy" {print $2}' web/go.mod)
+WEB=$(git describe --tags --match 'web/*' --abbrev=0 2>/dev/null | sed 's#^web/##' || true)
+if [ -z "$TAXONOMY" ] || [ -z "$WEB" ]; then
+  echo "adopt-check: skipped — no taxonomy require in web/go.mod or no web/* tag reachable from HEAD (a shallow clone?)" >&2
+  exit 0
+fi
+CACHE="$(go env GOMODCACHE)/github.com/garm-ai/tools"
+TMP=$(mktemp -d)
+trap 'chmod -R u+w "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
+cd "$TMP"
+go mod init adopter >/dev/null 2>&1
+# README "Adopting a package", step 1.
+if [ ! -d "$CACHE/web@$WEB" ] && ! GOWORK=off go get "github.com/garm-ai/tools/web@$WEB" >/dev/null 2>&1; then
+  echo "adopt-check: skipped — web@$WEB is not in the module cache and could not be downloaded; the tag is not published yet" >&2
+  exit 0
+fi
+GOWORK=off go mod download "github.com/garm-ai/tools/taxonomy@$TAXONOMY"
+# README "Adopting a package", step 2, verbatim with the versions substituted.
+mkdir -p proto && cp -R "$CACHE/web@$WEB/proto/." proto/ && cp -R "$CACHE/taxonomy@$TAXONOMY/proto/." proto/ && chmod -R u+w proto
+garm lint --proto proto
+garm catalogue build --proto proto -o web.binpb --source adopter
+echo "ok: the README's adopter step lints and builds a catalogue from web@$WEB and taxonomy@$TAXONOMY"
+"""
+
 [tasks."lint-taxonomy"]
 description = "garm lint over the taxonomy alone"
 depends = ["cli"]
@@ -185,4 +221,4 @@ depends = ["catalogue-web", "daemon"]
 run = "garmd check --catalogue build/web.binpb"
 
 [tasks.ci]
-depends = ["vendor-check", "buf-lint", "lint-taxonomy", "lint-web", "check-web", "lint", "build", "test", "tidy-check", "acceptance", "gen-check"]
+depends = ["vendor-check", "buf-lint", "lint-taxonomy", "lint-web", "check-web", "adopt-check", "lint", "build", "test", "tidy-check", "acceptance", "gen-check"]

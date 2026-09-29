@@ -6,7 +6,7 @@ served as NATS micro services behind [garmd](https://github.com/garm-ai/garmd),
 and maintained here. You take the packages you want and nothing else.
 
 Status, 29 September 2026: phase 1 (`taxonomy`, `sanitize`, `fetch_page`) is
-tagged: `taxonomy/v0.1.1`, `sanitize/v0.1.1`, `web/v0.1.0`. `KNOWN-GAPS.md`
+tagged: `taxonomy/v0.1.1`, `sanitize/v0.1.1`, `web/v0.1.1`. `KNOWN-GAPS.md`
 says what is built and what is deliberately not; the roadmap below says what
 arrives when.
 
@@ -35,11 +35,14 @@ One directory, one Go module, one release train. A package holds:
 - a README that explains every annotation choice in plain words.
 
 One repository, **per-package adoption**. Each package is its own Go module,
-tagged `<package>/vX.Y.Z`. You depend on `github.com/garm-ai/tools/web@v0.1.0` (the git tag is `web/v0.1.0`),
+tagged `<package>/vX.Y.Z`. You depend on `github.com/garm-ai/tools/web@v0.1.1` (the git tag is `web/v0.1.1`),
 not on this repository, and you inherit only what that package needs: `web`
 brings `taxonomy` (the vocabulary its tool names) and `sanitize` (the wrapper
-its response uses), both tagged packages of this repository, and nothing
-else. One CI and one release train here; no inherited tools there.
+its response uses), both tagged packages of this repository, and no other
+package of this repository. Its `go.mod` also names `nats-server`, which only
+its end-to-end test uses: the entry joins your module graph (`go mod tidy`
+keeps every build tag's imports), and your binary never links it. One CI and
+one release train here; no inherited tools there.
 
 Separate repositories per package were considered and rejected: these packages
 change together far more often than they change apart, and N repositories
@@ -51,7 +54,7 @@ buys an independence nobody asked for at the cost of N pipelines.
 |---|---|---|---|
 | `taxonomy/` | `github.com/garm-ai/tools/taxonomy` | `taxonomy/v0.1.1` | The compartments and tool sets the packages here share: `internet`, `generated-artefacts`; `research`, `documents` |
 | `sanitize/` | `github.com/garm-ai/tools/sanitize` | `sanitize/v0.1.1` | Cleaning and wrapping text an attacker may have written, before a model reads it |
-| `web/` | `github.com/garm-ai/tools/web` | `web/v0.1.0` | `web.v1.fetch_page`: one public https page in, its readable text out, behind an allowlist and an SSRF floor |
+| `web/` | `github.com/garm-ai/tools/web` | `web/v0.1.1` | `web.v1.fetch_page`: one public https page in, its readable text out, behind an allowlist and an SSRF floor |
 
 `payments/`, `identity/` and `compliance/` are the packages this repository
 was created for and are not yet seeded; the three above are the first
@@ -63,7 +66,7 @@ The full set, planned and intended:
 |---|---|---|---|
 | `taxonomy` | The shared vocabulary: `internet` and `generated-artefacts` compartments; `research` and `documents` tool sets | none | phase 1, tagged `taxonomy/v0.1.1` |
 | `sanitize` | Normalises untrusted content before it reaches a model: control characters, injection sentinels, length caps, an untrusted marker | none | phase 1, tagged `sanitize/v0.1.1` |
-| `web` | `fetch_page`: a governed page fetcher with a host allowlist and blocklist, an SSRF floor, redirect re-checks, text extraction | prompt injection, exfiltration | phase 1, tagged `web/v0.1.0` |
+| `web` | `fetch_page`: a governed page fetcher with a host allowlist and blocklist, an SSRF floor, redirect re-checks, text extraction | prompt injection, exfiltration | phase 1, tagged `web/v0.1.1` |
 | `web` | `search_web`: a search client whose results are filtered by the same host policy | prompt injection | planned, phase 2 |
 | `artefacts` | An object store for generated files with `get`, `list` and `delete`, owner-only until the authorization graph lands | data exposure | planned, phase 2 |
 | `documents` | `create_html_document`, `create_workbook` (Excel) | data exposure | planned, phase 2 |
@@ -124,21 +127,32 @@ first.
 Two steps, because garm builds a catalogue from one proto tree and has no
 proto-dependency mechanism beyond buf:
 
-1. `go get github.com/garm-ai/tools/web@v0.1.0` — the generated messages
+1. `go get github.com/garm-ai/tools/web@v0.1.1` — the generated messages
    and the `ServeWebService` binding your `main` registers on a `garmtool`
    service.
-2. Copy the package's proto tree, and the taxonomy's, into your own:
-   `cp -R "$(go env GOMODCACHE)/github.com/garm-ai/tools/web@v0.1.0/proto/." proto/`
-   and the same for `taxonomy@v0.1.1`. `garm lint` and `garm catalogue build`
-   then see the declarations. (The module cache is the same bytes your build
-   links, so the proto and the binding cannot disagree.)
+2. Copy the package's proto tree, and the taxonomy's, into your own. The
+   module cache is read-only and `cp -R` keeps its modes, so create the
+   directory first and make the copy writable after:
 
-This repository's own CI does exactly that: `mise run assemble` copies the
-packages' trees into `build/proto`, and `garm lint`, `garm catalogue build`
-and `garmd check` run over it (`lint-web`, `catalogue-web`, `check-web`).
+   ```sh
+   mkdir -p proto && cp -R "$(go env GOMODCACHE)/github.com/garm-ai/tools/web@v0.1.1/proto/." proto/ && cp -R "$(go env GOMODCACHE)/github.com/garm-ai/tools/taxonomy@v0.1.1/proto/." proto/ && chmod -R u+w proto
+   ```
+
+   `garm lint` and `garm catalogue build` then see the declarations. (The
+   module cache is the same bytes your build links, so the proto and the
+   binding cannot disagree.)
+
+This repository's own CI does both: `mise run assemble` copies the packages'
+trees from the working tree into `build/proto`, and `garm lint`,
+`garm catalogue build` and `garmd check` run over it (`lint-web`,
+`catalogue-web`, `check-web`); `mise run adopt-check` runs step 2 as written,
+from the module cache into a temporary directory, then `garm lint` and
+`garm catalogue build` over that, so the commands above cannot regress.
 
 Then, as with any tool of your own: vendor the annotations once with
-`garm init` (garm v0.14.2 or later), publish the catalogue with
+`garm init` (garm v0.14.2 or later; under v0.15.0 `garm lint` warns `O1` that
+`web.v1.WebService` names no owner — a warning, not an error, until the pin
+here moves to v0.15.0 and the annotation is added), publish the catalogue with
 `garm catalogue publish`, run the package's service next to your own, let
 garmd mount it, and in an agent manifest allowlist the tools you want and add
 guards, for example `args.url.startsWith("https://docs.example.com/")`.
@@ -206,8 +220,8 @@ Go 1.26, `mise` for the toolchain, `buf` for protos.
 ```
 mise install          the toolchain
 mise run ci           what CI runs: vendor-check, buf-lint, lint-taxonomy, lint-web,
-                      check-web (which builds the catalogue first), lint, build,
-                      test, tidy-check, acceptance, gen-check
+                      check-web (which builds the catalogue first), adopt-check,
+                      lint, build, test, tidy-check, acceptance, gen-check
 mise run gen          regenerate the committed Go from the protos
 ```
 
@@ -219,7 +233,7 @@ No `replace` directive is ever committed.
 
 Tests run over an embedded NATS server and send the `Garm-Invocation` header
 the way garmd does; no test talks to the internet. Releases are per-package
-tags, for example `web/v0.1.0`. A package's README states what changed and
+tags, for example `web/v0.1.1`. A package's README states what changed and
 what its annotations mean.
 
 ## How this differs from examples

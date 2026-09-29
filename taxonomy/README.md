@@ -21,8 +21,10 @@ a compartment says whose business it is.
 ## Adopting it
 
 Copy `proto/tools/taxonomy/v1/taxonomy.proto` into your proto tree (from the
-module cache, `$(go env GOMODCACHE)/github.com/garm-ai/tools/taxonomy@v0.1.1/proto/`)
-and import it from any proto that names one of these compartments or sets,
+module cache, `$(go env GOMODCACHE)/github.com/garm-ai/tools/taxonomy@v0.1.1/proto/`;
+the cache is read-only and `cp -R` keeps its modes, so create the target
+directory first and `chmod -R u+w` it after — the repository README's
+"Adopting a package" has the exact commands) and import it from any proto that names one of these compartments or sets,
 even though no symbol is referenced: the import graph should say that a tool
 depends on the file declaring its compartments.
 
