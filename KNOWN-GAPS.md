@@ -24,8 +24,17 @@ item from the list below to this one.
   a cap out of range); the SSRF floor refuses non-public addresses and local
   or metadata names before DNS, and the guarded dialer resolves the host
   itself, refuses unless every address is public, and dials the vetted
-  literal. The rest of the service — redirect re-check, extraction, the
-  wrapped response, `webd` — arrives in the next tasks.
+  literal; extraction reduces HTML to the text a reader sees (`script`,
+  `style`, `template`, `noscript`, `iframe`, `object`, `svg`, comments and
+  hidden subtrees dropped, the title kept apart). The rest of the service —
+  redirect re-check, the wrapped response, `webd` — arrives in the next
+  tasks.
+- `web`: extraction judges "hidden" from the markup alone: the `hidden`
+  attribute, `aria-hidden`, and inline `style`. Text hidden by an external
+  stylesheet, a class (`sr-only`, `visually-hidden`), a `clip`/`clip-path`
+  rule, or a zero-height overflow box is not dropped and reaches the
+  sanitiser like any other text. Rendering CSS is out of scope for a text
+  tool; the sanitiser's injection-phrase notice is the backstop.
 - `web`: the guarded dialer connects to the first vetted address only. A host
   whose first address is unreachable is not retried on its second; the fetch
   fails and the caller retries.

@@ -5,7 +5,8 @@ wrapped as untrusted.** The first tool of the Hermes port, and the model for
 every untrusted-content tool that follows it.
 
 Status: the contract is declared, lints, builds a catalogue and mounts; the
-policy file loads and the SSRF floor and guarded dialer are in place; the
+policy file loads, the SSRF floor and guarded dialer are in place, and
+extraction (`extract.go`: HTML to the text a reader sees) is built; the
 fetcher and `webd` are not built yet and the module is not tagged.
 `web/v0.1.0` arrives with `webd`.
 
@@ -75,7 +76,19 @@ what it was shown.
 elements dropped) and after `sanitize.Clean` (NFC, invisible characters
 removed, whitespace collapsed, sentinels neutralised, capped at
 `char_limit`), between `<<<untrusted-content source="…">>>` and
-`<<<end-untrusted-content>>>`. `notices` repeats the sanitiser's annotations
+`<<<end-untrusted-content>>>`.
+
+Extraction is one pass over `golang.org/x/net/html`'s tokenizer, no DOM.
+"Hidden" means the `hidden` attribute, `aria-hidden="true"`, or an inline
+`style` that says `display:none`, `visibility:hidden`, `opacity:0`,
+`font-size:0`, or `left`/`top`/`text-indent` of three or more digits off the
+page. A hidden element's whole subtree is dropped, by counting the nesting
+of the tag that opened it; a self-closing non-void tag (`<div hidden/>`)
+opens a subtree the way a browser opens one. Block elements start a line;
+`<title>` is returned separately and never appears in the text. A
+`text/plain` body (with or without parameters) passes through untouched.
+What an external stylesheet or a class hides cannot be seen from the
+markup and is not dropped (see `KNOWN-GAPS.md`). `notices` repeats the sanitiser's annotations
 as data. `content_sha256` is over `content` as returned. `policy_digest`
 identifies the lists in force, so a ledger row joins to the exact policy
 that permitted the fetch.
