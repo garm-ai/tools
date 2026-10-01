@@ -1,0 +1,30 @@
+version: v2
+modules:
+  # One module per package's proto tree, added by the task that creates it.
+  # Not one module at the root: a buf module root must contain the full
+  # package path, and a consumer copies a package's proto/ directory whole.
+  - path: taxonomy/proto
+  - path: search/proto
+  - path: web/proto
+  # The garm annotations, vendored by `garm init`. A module of their own so
+  # they are imported by their real path while staying OUT of what is
+  # generated: Go for them already exists in github.com/garm-ai/contracts,
+  # and a second copy registering the same file panics at init.
+  - path: third_party/proto
+    lint:
+      use: [BASIC]
+deps:
+  # Field constraints. garm evaluates these in the chain, before the
+  # resolver, so a request that can never succeed costs no hop.
+  - buf.build/bufbuild/protovalidate
+lint:
+  use: [STANDARD]
+  except:
+    # A tool's proto imports the taxonomy it names compartments from even
+    # though it references no symbol in it: the import graph should say
+    # that a tool depends on the file declaring its compartments, and
+    # `garm catalogue build` reads declarations off the whole tree. The bank
+    # example carries the same warning for the same reason.
+    - IMPORT_USED
+breaking:
+  use: [FILE]

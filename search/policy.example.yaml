@@ -1,0 +1,63 @@
+# The endpoint and the result host lists for search_web, per deployment.
+# Loaded once at boot; a file that cannot be read, has an unknown key,
+# names no allowlist, or names an endpoint that could never be reached stops
+# the service, because a search service that started on a policy it could
+# not read is a service that repeats whatever links it is handed.
+#
+# The API key is NOT here. It is a file of its own, named by
+# --api-key-file or SEARCHD_API_KEY_FILE, so that a policy file can be
+# reviewed, diffed and committed without holding a credential.
+
+# The only backend implemented. Brave returns rows out of an index, so a
+# title and an excerpt are text the page's own author wrote; an LLM-backed
+# provider writes them itself, which is a larger injection surface pointed
+# at this tenant's model.
+backend: brave
+
+# Optional: the default is the backend's own. https, with no credentials
+# and no query string — the client builds the query, and a key pasted into
+# one would be logged by every proxy in the path. Both are refused at boot.
+endpoint: "https://api.search.brave.com/res/v1/web/search"
+
+# Which hosts may appear in an answer. A result on any other host is
+# DROPPED, not refused, and the count is reported in the response, so an
+# agent is never shown a link fetch_page would refuse to follow.
+#
+# A host is an exact name ("bankofengland.co.uk") or a wildcard over its
+# subdomains ("*.gov.uk", which matches www.gov.uk and a.b.gov.uk but not
+# gov.uk itself). Lower-case DNS labels only: no scheme, port or path.
+#
+# Keep this the same list fetch_page allows, or narrower. A link this tool
+# returns is a link an agent will try to read.
+allow:
+  - "*.gov.uk"
+  - bankofengland.co.uk
+  - www.fca.org.uk
+
+# Checked first, in every case, and wins over allow.
+block:
+  - "*.internal.example-bank"
+
+# Not configurable, listed so a reviewer sees it.
+#
+# Outbound, to the endpoint: https only, no credentials in the URL, no
+# query of the operator's own, the host floor by name before DNS, every
+# resolved address checked, and NO REDIRECTS — this request carries the
+# deployment's API key, and a Location header is the endpoint asking for it
+# to be sent somewhere else.
+#
+# Inbound, from the index: every result URL must be https with no
+# credentials, on a host DNS could carry, past the same address floor —
+# private, loopback, link-local, carrier-grade NAT, multicast, reserved and
+# documentation ranges, every IPv6 range that embeds an IPv4 address, cloud
+# metadata names and addresses, localhost, .local, .internal, .arpa,
+# Kubernetes service names — and then on the allowlist above.
+#
+# private_networks: deny
+
+# Caps.
+max_results: 20           # ceiling on the request's limit; 1..20
+max_snippet_chars: 1000   # per excerpt, before the untrusted wrapper; 100..4000
+max_body_bytes: 2097152   # the most JSON the endpoint may send back
+timeout: 10s
+user_agent: "garm-search/0.1 (+https://github.com/garm-ai/tools)"
