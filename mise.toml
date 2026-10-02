@@ -18,9 +18,12 @@ description = "Install the garm CLI at the pinned version"
 #
 # Raised to v0.27.0 to migrate off `--proto`: this repository now composes
 # every catalogue from catalogue.yaml, which v0.19.0 has never heard of.
-# v0.27.0 is the newest tag published when this migration landed; `--proto`
-# itself is deprecated there too but nothing here passes it any more.
-run = "go install github.com/garm-ai/garm/cmd/garm@v0.27.0"
+# Raised again to v0.29.0, the release that deletes --proto outright: a pin
+# left behind at v0.27.0 while --proto no longer appears anywhere in this
+# repository was spread for no reason, and the spread itself is the hazard —
+# see devkit and sts, which were still linting the bank catalogue on a CLI
+# predating lint rules A12-A15.
+run = "go install github.com/garm-ai/garm/cmd/garm@v0.29.0"
 
 [tasks.plugin]
 description = "Install the tool generator at the pinned version"
@@ -28,7 +31,7 @@ description = "Install the tool generator at the pinned version"
 # under you changes committed output for no reason anyone asked for. It must
 # be the same release as the CLI: one writes the catalogue, the other writes
 # the binding whose hash the catalogue is checked against.
-run = "go install github.com/garm-ai/garm/cmd/protoc-gen-garm-go@v0.27.0"
+run = "go install github.com/garm-ai/garm/cmd/protoc-gen-garm-go@v0.29.0"
 
 [tasks.daemon]
 description = "Install garmd at the pinned version, for the mount check"

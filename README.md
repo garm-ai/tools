@@ -201,8 +201,7 @@ CLI from the contract:
 - **garm with `catalogue.yaml` support** — a `module:` entry is how the
   manifest names an adopted package, and the version it resolves to comes
   from your own `go.mod` rather than from a copied proto tree. This
-  repository pins v0.27.0, the newest tag published when it migrated off
-  `--proto`.
+  repository pins v0.29.0, the release that deletes `--proto` outright.
 - **garmd v0.3.0 or later.** `protoc-gen-garm-go` v0.18.1 synthesises an
   input card and a result card beside every tool, so `web`'s catalogue
   declares three tools where it declared one. A daemon that predates
