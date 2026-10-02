@@ -7,8 +7,9 @@ first of phase 2 is `search/v0.1.0`.
 
 - `taxonomy` - `internet`, `generated-artefacts`; `research`, `documents`, as a
   proto file a consumer copies and a Go module with the same four strings as
-  constants. `garm lint --proto taxonomy/proto` is clean; a catalogue cannot be
-  built from it alone because it declares no tool, and that is correct.
+  constants. `garm lint` (over `taxonomy/catalogue.yaml`) is clean; a catalogue
+  cannot be built from it alone because it declares no tool, and that is
+  correct.
 - `sanitize` - `Clean` (NFC, control and invisible characters removed and
   noticed, whitespace collapsed, sentinels neutralised, injection phrases
   annotated, rune cap with a note) and `Wrap` (the in-band untrusted-content

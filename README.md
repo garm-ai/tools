@@ -134,39 +134,50 @@ first.
 
 ## Adopting a package
 
-Two steps, because garm builds a catalogue from one proto tree and has no
-proto-dependency mechanism beyond buf:
+Two steps, because garm builds a catalogue from a `catalogue.yaml` manifest
+and a `module:` entry is how that manifest names a package it does not own:
 
-1. `go get github.com/garm-ai/tools/web@v0.2.0` — the generated messages
-   and the `ServeWebService` binding your `main` registers on a `garmtool`
-   service.
-2. Copy the package's proto tree, and the taxonomy's, into your own. The
-   module cache is read-only and `cp -R` keeps its modes, so create the
-   directory first and make the copy writable after:
+1. `go get github.com/garm-ai/tools/web@v0.2.0` — the generated messages,
+   the `ServeWebService` binding your `main` registers on a `garmtool`
+   service, and the `require` your own `go.mod` now carries. That `require`
+   is not incidental: `garm catalogue build` resolves a module entry's
+   version with `go list -m`, run in the directory your `catalogue.yaml`
+   lives in, and refuses outright when that directory has no go.mod — a
+   module entry names WHAT to include and go.mod says WHICH VERSION, so a
+   tree with no module graph has nothing to pin the descriptors to.
+2. Add a `module:` entry for `web` and one for its own `taxonomy`
+   requirement to your `catalogue.yaml`, beside that go.mod:
 
-   ```sh
-   mkdir -p proto && cp -R "$(go env GOMODCACHE)/github.com/garm-ai/tools/web@v0.2.0/proto/." proto/ && cp -R "$(go env GOMODCACHE)/github.com/garm-ai/tools/taxonomy@v0.2.0/proto/." proto/ && chmod -R u+w proto
+   ```yaml
+   include:
+     - path: proto                       # your own declarations, if any
+     - module: github.com/garm-ai/tools/web
+       packages: [web.v1]
+     - module: github.com/garm-ai/tools/taxonomy
+       packages: [tools.taxonomy.v1]
    ```
 
-   `garm lint` and `garm catalogue build` then see the declarations. (The
-   module cache is the same bytes your build links, so the proto and the
-   binding cannot disagree.)
+   No proto tree to copy and nothing to keep in sync: the version comes from
+   your own `go.mod`, the bytes come from the module cache your build
+   already links, and `garm lint` and `garm catalogue build` see the
+   declarations the moment the entry is there. `garm catalogue init` writes
+   a first `catalogue.yaml` for a tree that does not have one yet.
 
 For `search` the same two steps with `github.com/garm-ai/tools/search@v0.1.0`
-in place of `web`, plus one file it does not share: a search API needs a
-credential, and `searchd` takes it as `--api-key-file` (or
-`SEARCHD_API_KEY_FILE`) — a path, never a value, so the key is not in a
-process list. `search/README.md` says why.
+and `packages: [search.v1]` in place of `web`'s, plus one file it does not
+share: a search API needs a credential, and `searchd` takes it as
+`--api-key-file` (or `SEARCHD_API_KEY_FILE`) — a path, never a value, so the
+key is not in a process list. `search/README.md` says why.
 
-This repository's own CI does both: `mise run assemble` copies the packages'
-trees from the working tree into `build/proto`, and `garm lint`,
-`garm catalogue build` and `garmd check` run over it (`lint-web` over the
-whole assembled tree, `catalogue-search`/`check-search`,
-`catalogue-web`/`check-web`); `mise run adopt-check` runs step 2 as written
-for `web`, from the module cache into a temporary directory, then `garm lint`
-and `garm catalogue build` over that, so the commands above cannot regress.
-There is no `adopt-check` for `search` yet, and there cannot be one until
-`search/v0.1.0` is on the proxy; `KNOWN-GAPS.md` records it.
+This repository's own CI does both: `catalogue.yaml` at the repository root
+lists `taxonomy/proto`, `search/proto` and `web/proto` as three `path:`
+entries, and `garm lint`, `garm catalogue build` and `garmd check` run over
+it (`lint-web` over the whole manifest, `catalogue-search`/`check-search`,
+`catalogue-web`/`check-web`); `mise run adopt-check` runs the two steps above
+exactly as written, for `web`, in a temporary directory with its own go.mod,
+so the commands above cannot regress. There is no `adopt-check` for `search`
+yet, and there cannot be one until `search/v0.1.0` is on the proxy;
+`KNOWN-GAPS.md` records it.
 
 Then, as with any tool of your own: vendor the annotations once with
 `garm init`, publish the catalogue with `garm catalogue publish`, run the
@@ -187,6 +198,11 @@ CLI from the contract:
   upgrades one and not the other generates imports of packages that no longer
   exist. `garm init` writes four annotation files now (`tool`, `agent`,
   `card`, `meta`); this repository vendors the two its protos import.
+- **garm with `catalogue.yaml` support** — a `module:` entry is how the
+  manifest names an adopted package, and the version it resolves to comes
+  from your own `go.mod` rather than from a copied proto tree. This
+  repository pins v0.27.0, the newest tag published when it migrated off
+  `--proto`.
 - **garmd v0.3.0 or later.** `protoc-gen-garm-go` v0.18.1 synthesises an
   input card and a result card beside every tool, so `web`'s catalogue
   declares three tools where it declared one. A daemon that predates

@@ -1,0 +1,29 @@
+# catalogue.yaml — what composes into this repository's assembled catalogue,
+# for `garm lint` and `garm catalogue build` to see as one tree.
+#
+# Three local trees, not one merged directory: taxonomy declares the
+# vocabulary that search and web both use, and each of them imports it
+# directly (`tools/taxonomy/v1/taxonomy.proto`). Every `path:` entry below is
+# on the import root for every other entry — internal/compile unions them —
+# so web.proto's import resolves against the taxonomy entry without copying
+# anything into a shared directory first, the way an adopter's own module
+# graph joins them in their own repository.
+#
+# This file replaces mise's `assemble` task, which used to copy taxonomy/proto,
+# search/proto and web/proto into build/proto so a single `--proto` root could
+# see all three. Manifest.Include is a list; listing the three paths here does
+# the same join with no copy step and no generated tree to keep in sync.
+#
+# `catalogue-search` and `catalogue-web` both build from this one manifest —
+# the two differ only in `--source` and `-o`, and `garm catalogue build`
+# includes every tool `compiler.Tools` finds in the compiled set regardless of
+# `--source`, which is free-form provenance and never a filter. Confirmed by
+# running both: each artifact names both search.v1.search_web and
+# web.v1.fetch_page.
+schema: v1
+name: tools
+
+include:
+  - path: taxonomy/proto
+  - path: search/proto
+  - path: web/proto

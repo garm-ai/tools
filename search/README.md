@@ -234,7 +234,7 @@ A policy is loaded once. Reloading on a signal is a known gap.
 
 ```bash
 mise run gen-search          # messages and the binding
-mise run lint-web            # garm lint over the assembled tree (taxonomy + search + web)
+mise run lint-web            # garm lint over the composed catalogue.yaml (taxonomy + search + web)
 mise run catalogue-search    # build/search.binpb
 mise run check-search        # garmd check: mounts on a bare deployment
 # from the repository root, against a local NATS on a port of your own:

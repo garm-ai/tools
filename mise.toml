@@ -9,13 +9,18 @@ buf = "1"
 [tasks.cli]
 description = "Install the garm CLI at the pinned version"
 # Pinned, not @latest: the catalogue digest must not move because someone
-# upgraded a CLI on a laptop. v0.19.0 is the CLI alone — the annotations and
-# the wire types it used to carry are github.com/garm-ai/contracts now — and
-# it is the first release whose generated card helpers are qualified by
+# upgraded a CLI on a laptop. v0.19.0 was the floor for the CLI alone — the
+# annotations and the wire types it used to carry are github.com/garm-ai/contracts
+# now — and the first release whose generated card helpers are qualified by
 # service (Default<Service><Card>, <Service><Card>From). The bare names it
 # emitted before collide the moment one proto package holds two single-tool
 # services, which is a shape this repository is one module away from.
-run = "go install github.com/garm-ai/garm/cmd/garm@v0.19.0"
+#
+# Raised to v0.27.0 to migrate off `--proto`: this repository now composes
+# every catalogue from catalogue.yaml, which v0.19.0 has never heard of.
+# v0.27.0 is the newest tag published when this migration landed; `--proto`
+# itself is deprecated there too but nothing here passes it any more.
+run = "go install github.com/garm-ai/garm/cmd/garm@v0.27.0"
 
 [tasks.plugin]
 description = "Install the tool generator at the pinned version"
@@ -23,7 +28,7 @@ description = "Install the tool generator at the pinned version"
 # under you changes committed output for no reason anyone asked for. It must
 # be the same release as the CLI: one writes the catalogue, the other writes
 # the binding whose hash the catalogue is checked against.
-run = "go install github.com/garm-ai/garm/cmd/protoc-gen-garm-go@v0.19.0"
+run = "go install github.com/garm-ai/garm/cmd/protoc-gen-garm-go@v0.27.0"
 
 [tasks.daemon]
 description = "Install garmd at the pinned version, for the mount check"
@@ -198,14 +203,16 @@ fi
 """
 
 [tasks."adopt-check"]
-description = "Walk the README's adopter step from the module cache into a temp dir, then garm lint and garm catalogue build over it"
-# The README's copy commands read from the module cache, which is read-only,
-# and `assemble` copies from the writable working tree, so it can never
-# notice a command that fails on a fresh machine. This runs the README's
-# commands as written against the bytes a consumer gets: taxonomy at the
-# version web/go.mod requires, web at the nearest web/* tag. Before that tag
-# is on the proxy it cannot be in the cache, so the task says so and passes;
-# once the tag is cut it is a real check.
+description = "Walk the README's adopter step into a temp module, then garm lint and garm catalogue build over it"
+# With no --proto, an adopter uses `module:` entries instead of a copy —
+# examples/catalogue.yaml already does this for real. `garm catalogue build`
+# resolves a module entry's version with `go list -m` run IN THE MANIFEST'S
+# OWN DIRECTORY, and refuses outright when that directory has no go.mod (see
+# examples/catalogue.yaml's own comment on why the bank's manifest sits at
+# its repository root). So the simulated adopter below needs a go.mod
+# requiring web and taxonomy beside its catalogue.yaml — which is more
+# faithful to a real adopter than the old copy-based check was, not less: a
+# real adopter has a go.mod too.
 depends = ["cli"]
 run = """
 set -e
@@ -215,54 +222,52 @@ if [ -z "$TAXONOMY" ] || [ -z "$WEB" ]; then
   echo "adopt-check: skipped — no taxonomy require in web/go.mod or no web/* tag reachable from HEAD (a shallow clone?)" >&2
   exit 0
 fi
-CACHE="$(go env GOMODCACHE)/github.com/garm-ai/tools"
 TMP=$(mktemp -d)
-trap 'chmod -R u+w "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
+trap 'rm -rf "$TMP"' EXIT
 cd "$TMP"
+# README "Adopting a package", step 1 — the real dependency, for both
+# packages this simulated adopter uses.
 go mod init adopter >/dev/null 2>&1
-# README "Adopting a package", step 1.
-if [ ! -d "$CACHE/web@$WEB" ] && ! GOWORK=off go get "github.com/garm-ai/tools/web@$WEB" >/dev/null 2>&1; then
-  echo "adopt-check: skipped — web@$WEB is not in the module cache and could not be downloaded; the tag is not published yet" >&2
+if ! GOWORK=off go get "github.com/garm-ai/tools/web@$WEB" "github.com/garm-ai/tools/taxonomy@$TAXONOMY" >/dev/null 2>&1; then
+  echo "adopt-check: skipped — web@$WEB or taxonomy@$TAXONOMY could not be downloaded; a tag is not published yet" >&2
   exit 0
 fi
-GOWORK=off go mod download "github.com/garm-ai/tools/taxonomy@$TAXONOMY"
-# README "Adopting a package", step 2, verbatim with the versions substituted.
-mkdir -p proto && cp -R "$CACHE/web@$WEB/proto/." proto/ && cp -R "$CACHE/taxonomy@$TAXONOMY/proto/." proto/ && chmod -R u+w proto
-garm lint --proto proto
-garm catalogue build --proto proto -o web.binpb --source adopter
+# README "Adopting a package", step 2 — a `module:` entry per adopted
+# package, beside the go.mod that requires them.
+cat > catalogue.yaml <<MANIFEST
+schema: v1
+name: adopter
+include:
+  - module: github.com/garm-ai/tools/web
+    packages: [web.v1]
+  - module: github.com/garm-ai/tools/taxonomy
+    packages: [tools.taxonomy.v1]
+MANIFEST
+garm lint
+garm catalogue build -o web.binpb --source adopter
 echo "ok: the README's adopter step lints and builds a catalogue from web@$WEB and taxonomy@$TAXONOMY"
 """
 
 [tasks."lint-taxonomy"]
 description = "garm lint over the taxonomy alone"
 depends = ["cli"]
-run = "garm lint --proto taxonomy/proto"
-
-[tasks.assemble]
-description = "Copy every package's proto tree into build/proto, which is what a consumer's tree looks like"
-# garm lint and garm catalogue build take ONE proto root and resolve imports
-# from it (internal/compile: a SourceResolver over the root). web.proto
-# imports the taxonomy from another package, so the two trees are joined
-# here, the way an adopter joins them in their own repository.
-run = """
-set -e
-rm -rf build/proto && mkdir -p build/proto
-cp -R taxonomy/proto/. build/proto/
-cp -R search/proto/. build/proto/
-cp -R web/proto/. build/proto/
-echo "assembled build/proto:"
-find build/proto -type f | sort
-"""
+dir = "taxonomy"
+run = "garm lint"
 
 [tasks."lint-web"]
-description = "garm lint over the assembled tree"
-depends = ["cli", "assemble"]
-run = "garm lint --proto build/proto"
+description = "garm lint over the composed catalogue.yaml"
+# No `assemble` and no `build/proto`: catalogue.yaml at the repository root
+# lists taxonomy/proto, search/proto and web/proto as three `path:` entries,
+# and `garm lint`/`garm catalogue build` union their import roots directly —
+# the same join `assemble` used to do by copying, now done natively. See
+# catalogue.yaml's own comment.
+depends = ["cli"]
+run = "garm lint"
 
 [tasks."catalogue-search"]
-description = "Build the search_web catalogue from the assembled tree"
-depends = ["cli", "assemble"]
-run = "garm catalogue build --proto build/proto -o build/search.binpb --source garm-ai/tools/search"
+description = "Build the search_web catalogue from catalogue.yaml"
+depends = ["cli"]
+run = "garm catalogue build -o build/search.binpb --source garm-ai/tools/search"
 
 [tasks."check-search"]
 description = "Assert the search_web catalogue mounts on a bare deployment"
@@ -273,9 +278,17 @@ depends = ["catalogue-search", "daemon"]
 run = "garmd check --catalogue build/search.binpb"
 
 [tasks."catalogue-web"]
-description = "Build the fetch_page catalogue from the assembled tree"
-depends = ["cli", "assemble"]
-run = "garm catalogue build --proto build/proto -o build/web.binpb --source garm-ai/tools/web"
+description = "Build the fetch_page catalogue from catalogue.yaml"
+# catalogue-search and catalogue-web read the same catalogue.yaml and differ
+# only in --source and -o: `garm catalogue build` includes every tool the
+# compiled set declares regardless of --source (free-form provenance, never
+# a filter), so both artifacts carry search.v1.search_web AND
+# web.v1.fetch_page either way — proved by running both and reading the tool
+# list each one prints. One manifest serves both targets; it would take two
+# only if one of them needed a tool the other must not see, which is not
+# this repository's situation.
+depends = ["cli"]
+run = "garm catalogue build -o build/web.binpb --source garm-ai/tools/web"
 
 [tasks."check-web"]
 description = "Assert the fetch_page catalogue mounts on a bare deployment"

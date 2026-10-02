@@ -1,0 +1,20 @@
+# catalogue.yaml — everything that composes into this deployment's catalogue.
+#
+# The manifest names WHAT to include; go.mod says WHICH VERSION. A module entry
+# has no version here on purpose: the generated Go already comes from that
+# requirement, so taking the descriptor version from anywhere else would let
+# this tree compile against one tag while declaring the descriptors of another.
+# A `version:` key is permitted for readability and must EQUAL what the module
+# graph resolves; a disagreement is an error, never a precedence rule.
+#
+# Written by `garm catalogue init`. Edit it freely — it is the authority from
+# here on, and the generator refuses to overwrite it without --force.
+#
+# taxonomy declares vocabulary, not tools, so there is nothing here to adopt a
+# module for: one input, this package's own proto.
+schema: v1
+name: taxonomy
+
+include:
+  # This deployment's own declarations.
+  - path: proto

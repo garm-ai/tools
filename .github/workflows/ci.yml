@@ -23,12 +23,12 @@ jobs:
       - uses: jdx/mise-action@v2
         with: { install: true, cache: true }
       # Everything: the vendored annotations against garm v0.14.2, buf lint,
-      # garm lint over the taxonomy and over the assembled proto tree, the
-      # fetch_page catalogue built from that tree and mounted on a bare
-      # garmd (garmd check), the README's adopter step run from the module
-      # cache (adopt-check), go vet and gofmt, build, every module's tests,
-      # tidiness of each go.mod on its own, freshness of the committed
-      # generated code, and the acceptance loop.
+      # garm lint over the taxonomy alone and over the composed
+      # catalogue.yaml, the fetch_page catalogue built from that manifest and
+      # mounted on a bare garmd (garmd check), the README's adopter step run
+      # from a simulated module (adopt-check), go vet and gofmt, build, every
+      # module's tests, tidiness of each go.mod on its own, freshness of the
+      # committed generated code, and the acceptance loop.
       - run: mise run ci
 
   # This repository's promise is that a consumer depends on one package by

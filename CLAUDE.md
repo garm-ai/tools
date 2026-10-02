@@ -62,7 +62,8 @@ mise run ci      everything CI runs
 ```
 
 The toolchain is pinned in `mise.toml`: `garm` and `protoc-gen-garm-go` from
-the same release (v0.19.0 — its card helpers are qualified by service), and
+the same release (v0.27.0 — v0.19.0 was the floor for card helpers qualified
+by service, raised to migrate off `--proto` onto `catalogue.yaml`), and
 `garmd` as a floor rather than a preference.
 
 Documentation is updated in the same commit as the fact it states: this

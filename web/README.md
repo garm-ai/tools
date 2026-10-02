@@ -217,7 +217,7 @@ A policy is loaded once. Reloading on a signal is a known gap.
 
 ```bash
 mise run gen-web          # messages and the binding
-mise run lint-web         # garm lint over the assembled tree
+mise run lint-web         # garm lint over the composed catalogue.yaml
 mise run catalogue-web    # build/web.binpb
 mise run check-web        # garmd check: mounts on a bare deployment
 go run ./web/cmd/webd --policy web/policy.example.yaml   # from the repository root; against a local NATS
